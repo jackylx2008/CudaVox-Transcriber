@@ -1,0 +1,51 @@
+app:
+  log_level: ${LOG_LEVEL:-INFO}
+  input_path: ${INPUT_FILE:-./input}
+  output_dir: ${OUTPUT_PATH:-./output}
+  temp_dir: ${TEMP_DIR:-./output/tmp}
+  cleanup_temp: ${CLEANUP_TEMP:-true}
+  ffmpeg_bin: ${FFMPEG_BIN:-ffmpeg}
+  supported_extensions:
+    - .wav
+    - .mp3
+    - .m4a
+    - .flac
+    - .aac
+
+device:
+  preferred: ${DEVICE:-cuda:0}
+  allow_cpu_fallback: ${ALLOW_CPU_FALLBACK:-true}
+
+funasr:
+  model: ${FUNASR_MODEL:-paraformer-zh}
+  vad_model: ${FUNASR_VAD_MODEL:-fsmn-vad}
+  punc_model: ${FUNASR_PUNC_MODEL:-ct-punc}
+  hub: ${FUNASR_HUB:-ms}
+  batch_size_s: ${FUNASR_BATCH_SIZE_S:-120}
+  hotword: ${FUNASR_HOTWORD:-}
+  max_single_segment_time: ${FUNASR_MAX_SINGLE_SEGMENT_TIME:-30000}
+
+pyannote:
+  model: ${PYANNOTE_MODEL:-pyannote/speaker-diarization-community-1}
+  token: ${HUGGINGFACE_TOKEN:-}
+  num_speakers: ${NUM_SPEAKERS:-}
+  min_speakers: ${MIN_SPEAKERS:-}
+  max_speakers: ${MAX_SPEAKERS:-}
+  min_segment_seconds: ${MIN_SEGMENT_SECONDS:-0.6}
+
+campp:
+  model: ${CAMPP_MODEL:-iic/speech_campplus_sv_zh-cn_16k-common}
+  similarity_threshold: ${CAMPP_SIMILARITY_THRESHOLD:-0.72}
+  db_dir: ${VOICEPRINT_DB_DIR:-./output/voiceprints}
+  metadata_file: ${VOICEPRINT_METADATA_FILE:-speakers.json}
+  speaker_prefix: ${VOICEPRINT_SPEAKER_PREFIX:-speaker_}
+  min_profile_seconds: ${VOICEPRINT_MIN_PROFILE_SECONDS:-1.5}
+  max_profile_audio_seconds: ${VOICEPRINT_MAX_PROFILE_AUDIO_SECONDS:-30.0}
+
+pipeline:
+  merge_gap_seconds: ${MERGE_GAP_SECONDS:-0.4}
+
+output:
+  write_json: ${WRITE_JSON:-true}
+  write_txt: ${WRITE_TXT:-true}
+  write_srt: ${WRITE_SRT:-true}

@@ -1,0 +1,9 @@
+{
+  "python.defaultInterpreterPath": "C:\\Users\\bcjt_\\anaconda3\\envs\\cudavox\\python.exe",
+  "python.terminal.activateEnvironment": false,
+  "code-runner.runInTerminal": true,
+  "code-runner.fileDirectoryAsCwd": false,
+  "code-runner.executorMap": {
+    "python": "$env:PYTHONIOENCODING='utf-8'; & 'C:\\Users\\bcjt_\\anaconda3\\envs\\cudavox\\python.exe' -u"
+  }
+}
