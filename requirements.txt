@@ -1,7 +1,14 @@
 # 先安装与你 CUDA 版本匹配的 PyTorch / torchaudio
 # 参考: https://pytorch.org/get-started/locally/
-funasr>=1.2.6
+funasr>=1.3.0
 modelscope>=1.35.0
+transformers
+tokenizers
+zhconv
+whisper_normalizer
+pyopenjtalk-plus
+compute-wer
+openai-whisper
 pyannote.audio>=3.3.2
 python-dotenv>=1.0.1
 PyYAML>=6.0.2

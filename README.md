@@ -15,7 +15,7 @@
 1. 先把输入音频统一转成 `16kHz / mono / wav`
 2. 用 `pyannote/speaker-diarization-community-1` 做说话人分离
 3. 按说话人片段切分音频
-4. 用 `FunASR` 的 `paraformer-zh + fsmn-vad + ct-punc` 做中文转写
+4. 用 `FunASR` 的 `Fun-ASR-Nano-2512` 做中文转写
 5. 把同一文件里的本地说话人片段拼成 profile 音频
 6. 用 `iic/speech_campplus_sv_zh-cn_16k-common` 提取平均声纹
 7. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
@@ -121,6 +121,10 @@ python -m cudavox_transcriber --input ".\input\2026-03-25 21_50_00.mp3"
 几个常用项：
 
 - `device.preferred`: 默认 `cuda:0`
+- `funasr.model`: 默认 `FunAudioLLM/Fun-ASR-Nano-2512`
+- `funasr.language`: 默认 `中文`
+- `funasr.itn`: 默认 `true`
+- `funasr.trust_remote_code`: 默认 `false`
 - `campp.similarity_threshold`: 声纹命中阈值，默认 `0.72`
 - `pyannote.num_speakers`: 已知说话人数时可直接指定
 - `pipeline.merge_gap_seconds`: 合并相邻同说话人片段的时间间隔

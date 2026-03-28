@@ -17,13 +17,16 @@ device:
   allow_cpu_fallback: ${ALLOW_CPU_FALLBACK:-true}
 
 funasr:
-  model: ${FUNASR_MODEL:-paraformer-zh}
-  vad_model: ${FUNASR_VAD_MODEL:-fsmn-vad}
-  punc_model: ${FUNASR_PUNC_MODEL:-ct-punc}
+  model: ${FUNASR_MODEL:-FunAudioLLM/Fun-ASR-Nano-2512}
+  vad_model: ${FUNASR_VAD_MODEL:-}
+  punc_model: ${FUNASR_PUNC_MODEL:-}
   hub: ${FUNASR_HUB:-ms}
   batch_size_s: ${FUNASR_BATCH_SIZE_S:-120}
   hotword: ${FUNASR_HOTWORD:-}
   max_single_segment_time: ${FUNASR_MAX_SINGLE_SEGMENT_TIME:-30000}
+  language: ${FUNASR_LANGUAGE:-}
+  itn: ${FUNASR_ITN:-true}
+  trust_remote_code: ${FUNASR_TRUST_REMOTE_CODE:-false}
 
 pyannote:
   model: ${PYANNOTE_MODEL:-pyannote/speaker-diarization-community-1}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -24,19 +26,28 @@ class FunASRTranscriber:
 
     def _load(self) -> None:
         from funasr import AutoModel
+        from funasr.register import tables
 
         try:
             from funasr.utils.postprocess_utils import rich_transcription_postprocess
         except Exception:
             rich_transcription_postprocess = None
 
+        if self._uses_fun_asr_nano():
+            self._ensure_fun_asr_nano_registered(tables)
+
         kwargs = {
             "model": self.settings.model,
-            "vad_model": self.settings.vad_model,
-            "punc_model": self.settings.punc_model,
             "hub": self.settings.hub,
             "device": self.device,
         }
+        trust_remote_code = self.settings.trust_remote_code
+        if trust_remote_code is not None:
+            kwargs["trust_remote_code"] = trust_remote_code
+        if self.settings.vad_model and not self._uses_fun_asr_nano():
+            kwargs["vad_model"] = self.settings.vad_model
+        if self.settings.punc_model and not self._uses_fun_asr_nano():
+            kwargs["punc_model"] = self.settings.punc_model
         if self.settings.max_single_segment_time > 0:
             kwargs["vad_kwargs"] = {
                 "max_single_segment_time": self.settings.max_single_segment_time
@@ -48,10 +59,31 @@ class FunASRTranscriber:
 
     def transcribe(self, audio_path: str | Path) -> str:
         self.logger.debug("开始转写片段: %s", Path(audio_path).resolve())
+        if self._uses_fun_asr_nano():
+            generate_kwargs = {
+                "input": [str(audio_path)],
+                "cache": {},
+                "batch_size": 1,
+            }
+            if self.settings.hotword:
+                generate_kwargs["hotwords"] = [self.settings.hotword]
+        else:
+            generate_kwargs = {
+                "input": str(audio_path),
+                "batch_size_s": self.settings.batch_size_s,
+                "hotword": self.settings.hotword or None,
+            }
+        language = self.settings.language or self._default_language()
+        if language:
+            generate_kwargs["language"] = language
+        itn = self.settings.itn
+        if itn is None and self._uses_fun_asr_nano():
+            itn = True
+        if itn is not None:
+            generate_kwargs["itn"] = itn
+
         result = self.model.generate(
-            input=str(audio_path),
-            batch_size_s=self.settings.batch_size_s,
-            hotword=self.settings.hotword or None,
+            **generate_kwargs,
         )
         text = self._extract_text(result).strip()
         if text and self._postprocess is not None:
@@ -88,3 +120,27 @@ class FunASRTranscriber:
         if isinstance(payload, str):
             return payload
         return ""
+
+    def _uses_fun_asr_nano(self) -> bool:
+        return "fun-asr-nano" in self.settings.model.lower()
+
+    def _default_language(self) -> str:
+        if self._uses_fun_asr_nano():
+            return "中文"
+        return ""
+
+    def _ensure_fun_asr_nano_registered(self, tables) -> None:
+        if tables.model_classes.get("FunASRNano") is not None:
+            return
+
+        import funasr
+
+        nano_dir = Path(funasr.__file__).resolve().parent / "models" / "fun_asr_nano"
+        if not nano_dir.exists():
+            raise FileNotFoundError(f"找不到 Fun-ASR-Nano 代码目录: {nano_dir}")
+
+        nano_dir_str = str(nano_dir)
+        if nano_dir_str not in sys.path:
+            sys.path.insert(0, nano_dir_str)
+
+        importlib.import_module("model")

@@ -28,13 +28,16 @@ class DeviceSettings:
 
 @dataclass
 class FunASRSettings:
-    model: str = "paraformer-zh"
-    vad_model: str = "fsmn-vad"
-    punc_model: str = "ct-punc"
+    model: str = "FunAudioLLM/Fun-ASR-Nano-2512"
+    vad_model: str = ""
+    punc_model: str = ""
     hub: str = "ms"
     batch_size_s: int = 120
     hotword: str = ""
     max_single_segment_time: int = 30000
+    language: str = ""
+    itn: Optional[bool] = None
+    trust_remote_code: Optional[bool] = None
 
 
 @dataclass

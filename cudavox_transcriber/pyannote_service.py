@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 from cudavox_transcriber.schemas import DiarizedSegment, PyannoteSettings
@@ -28,6 +29,14 @@ class PyannoteDiarizer:
             )
 
         import torch
+
+        # We preload waveform tensors with soundfile, so pyannote's optional
+        # torchcodec decoder is never used in this pipeline.
+        warnings.filterwarnings(
+            "ignore",
+            message=r"\ntorchcodec is not installed correctly so built-in audio decoding will fail\..*",
+            category=UserWarning,
+        )
         from pyannote.audio import Pipeline
 
         self.logger.info("加载 pyannote 模型: %s", self.settings.model)
@@ -72,7 +81,17 @@ class PyannoteDiarizer:
             pipeline_input["sample_rate"],
             tuple(pipeline_input["waveform"].shape),
         )
-        result = self.pipeline(pipeline_input, **kwargs)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"TensorFloat-32 \(TF32\) has been disabled as it might lead to reproducibility issues and lower accuracy\..*",
+            )
+            warnings.filterwarnings(
+                "ignore",
+                message=r"std\(\): degrees of freedom is <= 0\..*",
+                category=UserWarning,
+            )
+            result = self.pipeline(pipeline_input, **kwargs)
         annotation = (
             getattr(result, "exclusive_speaker_diarization", None)
             or getattr(result, "speaker_diarization", None)
