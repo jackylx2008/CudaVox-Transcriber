@@ -11,19 +11,18 @@ from pathlib import Path
 
 from logging_config import get_logger, setup_logger
 
-from cudavox_transcriber.audio import (
+from FunASRNano.audio import (
     build_profile_wav,
     convert_to_wav,
     ensure_dir,
     extract_wav_segment,
-    format_seconds,
     format_timestamp,
 )
-from cudavox_transcriber.funasr_service import FunASRTranscriber
-from cudavox_transcriber.pyannote_service import PyannoteDiarizer
-from cudavox_transcriber.runtime import resolve_device
-from cudavox_transcriber.schemas import DiarizedSegment, Settings
-from cudavox_transcriber.voiceprint_service import VoiceprintStore
+from FunASRNano.funasr_service import FunASRTranscriber
+from FunASRNano.pyannote_service import PyannoteDiarizer
+from FunASRNano.runtime import resolve_device
+from FunASRNano.schemas import DiarizedSegment, Settings
+from FunASRNano.voiceprint_service import VoiceprintStore
 
 
 class CudaVoxPipeline:
@@ -251,11 +250,13 @@ class CudaVoxPipeline:
         if self.settings.output.write_txt:
             txt_path = output_dir / f"{input_file.stem}.txt"
             txt_lines = []
-            for segment in segments:
+            for index, segment in enumerate(segments, start=1):
+                txt_lines.append(str(index))
                 txt_lines.append(
-                    f"[{format_seconds(segment.start)} - {format_seconds(segment.end)}] "
-                    f"{segment.speaker_name} ({segment.local_speaker})"
+                    f"{format_timestamp(segment.start)} --> {format_timestamp(segment.end)} "
+                    f"（{segment.speaker_name}）"
                 )
+                txt_lines.append("")
                 txt_lines.append(segment.text or "")
                 txt_lines.append("")
             txt_path.write_text("\n".join(txt_lines).strip() + "\n", encoding="utf-8")

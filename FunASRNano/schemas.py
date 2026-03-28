@@ -57,6 +57,7 @@ class CamppSettings:
     db_dir: str = "./output/voiceprints"
     metadata_file: str = "speakers.json"
     speaker_prefix: str = "speaker_"
+    speaker_name_map: dict[str, str] = field(default_factory=dict)
     min_profile_seconds: float = 1.5
     max_profile_audio_seconds: float = 30.0
 

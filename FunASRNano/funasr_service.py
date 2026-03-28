@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from cudavox_transcriber.schemas import FunASRSettings
+from FunASRNano.schemas import FunASRSettings
 
 
 class FunASRTranscriber:

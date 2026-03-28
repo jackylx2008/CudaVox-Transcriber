@@ -101,7 +101,7 @@ python main.py --config .\config.yaml
 也可以用模块方式：
 
 ```powershell
-python -m cudavox_transcriber --input ".\input\2026-03-25 21_50_00.mp3"
+python -m FunASRNano --input ".\input\2026-03-25 21_50_00.mp3"
 ```
 
 ## 输出目录
@@ -113,6 +113,24 @@ python -m cudavox_transcriber --input ".\input\2026-03-25 21_50_00.mp3"
 - `output/<音频名>/<音频名>.srt`
 - `output/voiceprints/speakers.json`
 - `output/voiceprints/<speaker_id>.npy`
+
+## 声纹姓名映射
+
+如果你希望转写结果直接显示人名，而不是 `speaker_0001` 这类 ID，可以在 [common.env](/d:/CloudStation/Python/Project/CudaVox-Transcriber/common.env) 里配置：
+
+```env
+VOICEPRINT_NAME_MAP=speaker_0001:张三;speaker_0002:李四
+```
+
+说明：
+
+- 使用格式 `speaker_id:姓名`
+- 多个映射用英文分号分隔
+- 只需要维护 `speaker_id` 到姓名的对应关系，不要手动改 `.npy` 文件名
+- 程序启动时会自动把这个映射同步到 `output/voiceprints/speakers.json`
+- 后续输出的 `json / txt / srt` 会直接带上这个姓名
+
+如果映射里写了不存在的 `speaker_id`，程序会跳过并在日志里提示。
 
 ## 配置说明
 
@@ -126,6 +144,7 @@ python -m cudavox_transcriber --input ".\input\2026-03-25 21_50_00.mp3"
 - `funasr.itn`: 默认 `true`
 - `funasr.trust_remote_code`: 默认 `false`
 - `campp.similarity_threshold`: 声纹命中阈值，默认 `0.72`
+- `VOICEPRINT_NAME_MAP`: 用 `speaker_id:姓名` 指定说话人显示名
 - `pyannote.num_speakers`: 已知说话人数时可直接指定
 - `pipeline.merge_gap_seconds`: 合并相邻同说话人片段的时间间隔
 

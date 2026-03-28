@@ -1,4 +1,4 @@
-from cudavox_transcriber.cli import main
+from FunASRNano.cli import main
 
 
 if __name__ == "__main__":

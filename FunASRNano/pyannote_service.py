@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
-from cudavox_transcriber.schemas import DiarizedSegment, PyannoteSettings
+from FunASRNano.schemas import DiarizedSegment, PyannoteSettings
 
 
 class PyannoteDiarizer:

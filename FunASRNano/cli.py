@@ -8,9 +8,9 @@ from pathlib import Path
 
 from logging_config import get_logger, setup_logger
 
-from cudavox_transcriber.audio import resolve_audio_files
-from cudavox_transcriber.config import load_settings
-from cudavox_transcriber.pipeline import CudaVoxPipeline
+from FunASRNano.audio import resolve_audio_files
+from FunASRNano.config import load_settings
+from FunASRNano.pipeline import CudaVoxPipeline
 
 
 def build_parser() -> argparse.ArgumentParser:

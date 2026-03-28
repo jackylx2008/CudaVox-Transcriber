@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cudavox_transcriber.schemas import CamppSettings, VoiceprintIdentity
+from FunASRNano.schemas import CamppSettings, VoiceprintIdentity
 
 
 class VoiceprintStore:
@@ -20,6 +20,7 @@ class VoiceprintStore:
         self._pipeline = None
         self._embedding_cache: dict[str, object] = {}
         self.metadata = self._load_metadata()
+        self._sync_speaker_names()
         self.logger.info(
             "声纹库初始化完成: db_dir=%s, 已登记说话人=%s",
             self.db_dir.resolve(),
@@ -39,6 +40,29 @@ class VoiceprintStore:
             encoding="utf-8",
         )
         self.logger.debug("已保存声纹元数据: %s", self.metadata_path.resolve())
+
+    def _sync_speaker_names(self) -> None:
+        name_map = self.settings.speaker_name_map
+        if not name_map:
+            return
+
+        changed = 0
+        for speaker_id, speaker_name in name_map.items():
+            info = self.metadata.get("speakers", {}).get(speaker_id)
+            if info is None:
+                self.logger.warning(
+                    "VOICEPRINT_NAME_MAP 中的声纹 ID 不存在，已跳过: %s",
+                    speaker_id,
+                )
+                continue
+            if info.get("speaker_name") == speaker_name:
+                continue
+            info["speaker_name"] = speaker_name
+            changed += 1
+
+        if changed:
+            self.save()
+            self.logger.info("已从配置同步声纹姓名映射: %s 个", changed)
 
     @property
     def pipeline(self):
@@ -136,7 +160,7 @@ class VoiceprintStore:
         now = self._now()
         self.metadata["speakers"][speaker_id] = {
             "speaker_id": speaker_id,
-            "speaker_name": speaker_id,
+            "speaker_name": self.settings.speaker_name_map.get(speaker_id, speaker_id),
             "local_speaker_first_seen": local_speaker,
             "embedding_path": str(embedding_path.resolve()),
             "num_samples": 1,
@@ -154,7 +178,7 @@ class VoiceprintStore:
         )
         return VoiceprintIdentity(
             speaker_id=speaker_id,
-            speaker_name=speaker_id,
+            speaker_name=self.settings.speaker_name_map.get(speaker_id, speaker_id),
             similarity=round(best_score, 4) if best_score >= 0 else None,
             is_new=True,
             embedding_path=str(embedding_path.resolve()),

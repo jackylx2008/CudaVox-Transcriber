@@ -9,7 +9,7 @@ from typing import Any
 
 from logging_config import get_logger
 
-from cudavox_transcriber.schemas import (
+from FunASRNano.schemas import (
     AppSettings,
     CamppSettings,
     DeviceSettings,
@@ -69,6 +69,31 @@ def _parse_input_files(raw_value: str) -> list[str]:
     return [part.strip() for part in parts if part.strip()]
 
 
+def _parse_speaker_name_map(raw_value: str) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    if not raw_value.strip():
+        return mapping
+
+    for part in re.split(r"[;\r\n]+", raw_value):
+        item = part.strip()
+        if not item:
+            continue
+        if ":" not in item:
+            raise ValueError(
+                "VOICEPRINT_NAME_MAP 格式错误，必须使用 speaker_id:姓名，例如 "
+                "speaker_0001:张三;speaker_0002:李四"
+            )
+        speaker_id, speaker_name = item.split(":", 1)
+        speaker_id = speaker_id.strip()
+        speaker_name = speaker_name.strip()
+        if not speaker_id or not speaker_name:
+            raise ValueError(
+                "VOICEPRINT_NAME_MAP 格式错误，speaker_id 和 姓名 都不能为空。"
+            )
+        mapping[speaker_id] = speaker_name
+    return mapping
+
+
 def load_settings(
     config_path: str | Path = "config.yaml",
     env_path: str | Path = "common.env",
@@ -101,6 +126,13 @@ def load_settings(
     if raw_input_files:
         settings.app.input_files = _parse_input_files(raw_input_files)
         LOGGER.info("从 .env 读取到待处理文件数量: %s", len(settings.app.input_files))
+    raw_speaker_name_map = os.getenv("VOICEPRINT_NAME_MAP", "").strip()
+    if raw_speaker_name_map:
+        settings.campp.speaker_name_map = _parse_speaker_name_map(raw_speaker_name_map)
+        LOGGER.info(
+            "从 .env 读取到声纹姓名映射数量: %s",
+            len(settings.campp.speaker_name_map),
+        )
     LOGGER.info(
         "配置加载完成: input=%s, input_files=%s, output=%s, preferred_device=%s, log_level=%s",
         settings.app.input_path,
