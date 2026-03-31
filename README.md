@@ -144,6 +144,8 @@ VOICEPRINT_NAME_MAP=speaker_0001:张三;speaker_0002:李四
 - `funasr.itn`: 默认 `true`
 - `funasr.trust_remote_code`: 默认 `false`
 - `campp.similarity_threshold`: 声纹命中阈值，默认 `0.72`
+- `campp.relaxed_similarity_threshold`: 对已有稳定声纹启用保守复用的次级阈值，默认 `0.69`
+- `campp.named_similarity_threshold`: 对已命名说话人的跨音频复用阈值，默认 `0.64`
 - `VOICEPRINT_NAME_MAP`: 用 `speaker_id:姓名` 指定说话人显示名
 - `pyannote.num_speakers`: 已知说话人数时可直接指定
 - `pipeline.merge_gap_seconds`: 合并相邻同说话人片段的时间间隔

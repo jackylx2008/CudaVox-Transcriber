@@ -54,6 +54,12 @@ class PyannoteSettings:
 class CamppSettings:
     model: str = "iic/speech_campplus_sv_zh-cn_16k-common"
     similarity_threshold: float = 0.72
+    relaxed_similarity_threshold: float = 0.69
+    relaxed_similarity_margin: float = 0.04
+    relaxed_min_samples: int = 2
+    named_similarity_threshold: float = 0.64
+    named_similarity_margin: float = 0.08
+    named_min_samples: int = 5
     db_dir: str = "./output/voiceprints"
     metadata_file: str = "speakers.json"
     speaker_prefix: str = "speaker_"
