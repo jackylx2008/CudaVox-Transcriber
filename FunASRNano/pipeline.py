@@ -29,7 +29,7 @@ class CudaVoxPipeline:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         level = getattr(logging, settings.app.log_level.upper(), logging.INFO)
-        setup_logger(log_level=level)
+        setup_logger(log_level=level, reset_log=True)
         self.logger = get_logger(__name__)
         self.device = resolve_device(
             settings.device.preferred,

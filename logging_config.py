@@ -38,19 +38,20 @@ def setup_logger(
     root_logger.setLevel(log_level)
 
     if root_logger.handlers:
+        for handler in root_logger.handlers:
+            handler.close()
         root_logger.handlers.clear()
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(logging.Formatter(log_format))
 
-    file_mode = "a"
     if reset_log and resolved_log_file_key not in _RESET_DONE:
-        file_mode = "w"
+        resolved_log_file.write_text("", encoding="utf-8")
         _RESET_DONE.add(resolved_log_file_key)
 
     file_handler = RotatingFileHandler(
         resolved_log_file,
-        mode=file_mode,
+        mode="a",
         maxBytes=10 * 1024 * 1024,
         backupCount=5,
         encoding="utf-8",

@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("CLI 启动，开始加载配置。")
     settings = load_settings(args.config, args.env_file)
     level = getattr(logging, settings.app.log_level.upper(), logging.INFO)
-    setup_logger(log_level=level)
+    setup_logger(log_level=level, reset_log=True)
     logger = get_logger(__name__)
 
     if args.input:
