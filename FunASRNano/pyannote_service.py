@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
+from typing import Any
 
 from FunASRNano.schemas import PyannoteSettings, TranscriptSegment
 
@@ -13,10 +14,10 @@ class PyannoteDiarizer:
         self.settings = settings
         self.device = device
         self.logger = logger
-        self._pipeline = None
+        self._pipeline: Any | None = None
 
     @property
-    def pipeline(self):
+    def pipeline(self) -> Any:
         if self._pipeline is None:
             self._load()
         return self._pipeline
@@ -44,7 +45,10 @@ class PyannoteDiarizer:
             self.settings.model,
             token=self.settings.token,
         )
-        self._pipeline.to(torch.device(self.device))
+        pipeline = self._pipeline
+        if pipeline is None:
+            raise RuntimeError("pyannote pipeline 初始化失败。")
+        pipeline.to(torch.device(self.device))
 
     @staticmethod
     def _build_audio_input(audio_path: str | Path):
@@ -84,14 +88,18 @@ class PyannoteDiarizer:
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore",
-                message=r"TensorFloat-32 \(TF32\) has been disabled as it might lead to reproducibility issues and lower accuracy\..*",
+                message=(
+                    r"TensorFloat-32 \(TF32\) has been disabled as it might lead "
+                    r"to reproducibility issues and lower accuracy\..*"
+                ),
             )
             warnings.filterwarnings(
                 "ignore",
                 message=r"std\(\): degrees of freedom is <= 0\..*",
                 category=UserWarning,
             )
-            result = self.pipeline(pipeline_input, **kwargs)
+            pipeline = self.pipeline
+            result = pipeline(pipeline_input, **kwargs)
         annotation = (
             getattr(result, "exclusive_speaker_diarization", None)
             or getattr(result, "speaker_diarization", None)

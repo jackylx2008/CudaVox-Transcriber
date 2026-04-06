@@ -15,10 +15,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from logging_config import get_logger, setup_logger
+from logging_config import get_logger, setup_logger  # noqa: E402
 
-from FunASRNano.audio import cut_audio_clip, ensure_dir, ensure_ffmpeg
-from FunASRNano.config import load_settings
+from FunASRNano.audio import cut_audio_clip, ensure_dir, ensure_ffmpeg  # noqa: E402
+from FunASRNano.config import load_settings  # noqa: E402
 
 
 LOGGER = get_logger(__name__)

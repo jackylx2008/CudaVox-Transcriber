@@ -5,8 +5,30 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 from FunASRNano.schemas import CamppSettings, VoiceprintIdentity
+
+
+class SpeakerInfo(TypedDict):
+    speaker_id: str
+    speaker_name: str
+    local_speaker_first_seen: str
+    embedding_path: str
+    num_samples: int
+    created_at: str
+    updated_at: str
+    source_files: list[str]
+
+
+class VoiceprintMetadata(TypedDict):
+    speakers: dict[str, SpeakerInfo]
+
+
+class RankedCandidate(TypedDict):
+    speaker_id: str
+    info: SpeakerInfo
+    score: float
 
 
 class VoiceprintStore:
@@ -17,22 +39,23 @@ class VoiceprintStore:
         self.db_dir = Path(settings.db_dir)
         self.db_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_path = self.db_dir / settings.metadata_file
-        self._pipeline = None
-        self._embedding_cache: dict[str, object] = {}
+        self._pipeline: Any | None = None
+        self._embedding_cache: dict[str, Any] = {}
         self.metadata = self._load_metadata()
         self._sync_speaker_names()
         self.logger.info(
             "声纹库初始化完成: db_dir=%s, 已登记说话人=%s",
             self.db_dir.resolve(),
-            len(self.metadata.get('speakers', {})),
+            len(self.metadata["speakers"]),
         )
 
-    def _load_metadata(self) -> dict:
+    def _load_metadata(self) -> VoiceprintMetadata:
         if not self.metadata_path.exists():
             self.logger.info("声纹元数据不存在，创建新库: %s", self.metadata_path.resolve())
             return {"speakers": {}}
         self.logger.debug("加载声纹元数据: %s", self.metadata_path.resolve())
-        return json.loads(self.metadata_path.read_text(encoding="utf-8"))
+        data = json.loads(self.metadata_path.read_text(encoding="utf-8"))
+        return cast(VoiceprintMetadata, data)
 
     def save(self) -> None:
         self.metadata_path.write_text(
@@ -65,7 +88,7 @@ class VoiceprintStore:
             self.logger.info("已从配置同步声纹姓名映射: %s 个", changed)
 
     @property
-    def pipeline(self):
+    def pipeline(self) -> Any:
         if self._pipeline is None:
             self._load_pipeline()
         return self._pipeline
@@ -94,7 +117,8 @@ class VoiceprintStore:
         import numpy as np
 
         self.logger.debug("开始提取声纹 embedding: %s", Path(audio_path).resolve())
-        result = self.pipeline([str(audio_path)], output_emb=True)
+        pipeline = self.pipeline
+        result = cast(dict[str, Any], pipeline([str(audio_path)], output_emb=True))
         embedding = result.get("embs")
         if embedding is None:
             raise RuntimeError("CAM++ 未返回声纹 embedding。")
@@ -229,8 +253,8 @@ class VoiceprintStore:
         np.save(path, embedding)
         self._embedding_cache[str(path.resolve())] = embedding
 
-    def _rank_candidates(self, embedding) -> list[dict[str, object]]:
-        ranked: list[dict[str, object]] = []
+    def _rank_candidates(self, embedding) -> list[RankedCandidate]:
+        ranked: list[RankedCandidate] = []
         for speaker_id, info in self.metadata["speakers"].items():
             ref = self._load_embedding(Path(info["embedding_path"]))
             score = self._cosine_similarity(embedding, ref)
@@ -246,8 +270,8 @@ class VoiceprintStore:
 
     def _select_relaxed_candidate(
         self,
-        ranked: list[dict[str, object]],
-    ) -> dict[str, object] | None:
+        ranked: list[RankedCandidate],
+    ) -> RankedCandidate | None:
         if not ranked:
             return None
         candidate = ranked[0]
@@ -265,8 +289,8 @@ class VoiceprintStore:
 
     def _select_named_candidate(
         self,
-        ranked: list[dict[str, object]],
-    ) -> dict[str, object] | None:
+        ranked: list[RankedCandidate],
+    ) -> RankedCandidate | None:
         if not ranked:
             return None
         candidate = ranked[0]
@@ -288,7 +312,7 @@ class VoiceprintStore:
 
     def _match_existing_candidate(
         self,
-        candidate: dict[str, object],
+        candidate: RankedCandidate,
         embedding,
         source_file: str,
         match_mode: str,

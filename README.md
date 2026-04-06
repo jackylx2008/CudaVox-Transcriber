@@ -2,27 +2,86 @@
 
 基于 `FunASR + pyannote.audio + CAM++` 的中文语音转写与说话人区分项目。
 
-能力包括：
+当前版本在保留原有主流程的基础上，已经完成一轮面向后续扩展的重构：核心结果不再只是“说话人分离片段”，而是统一收敛到可复用的转写领域模型，便于后续继续增加：
+
+- 基于现有 `SRT` 结果切割音频
+- 只复用语音识别能力的独立工作流
+- 读取外部字幕再做后处理的工作流
+
+## 当前能力
 
 - 使用 CUDA 运行中文语音识别
 - 使用 `pyannote.audio` 做说话人分离
 - 使用 `CAM++` 生成与持久化声纹
 - 跨音频尽量复用同一个说话人 ID
 - 输出 `json / txt / srt`
+- 从历史转写结果中导出人工核对声纹样本
 
-## 方案结构
+## 主流程
 
-1. 先把输入音频统一转成 `16kHz / mono / wav`
+1. 把输入音频统一转成 `16kHz / mono / wav`
 2. 用 `pyannote/speaker-diarization-community-1` 做说话人分离
-3. 按说话人片段切分音频
+3. 按片段切分临时音频
 4. 用 `FunASR` 的 `Fun-ASR-Nano-2512` 做中文转写
 5. 把同一文件里的本地说话人片段拼成 profile 音频
-6. 用 `iic/speech_campplus_sv_zh-cn_16k-common` 提取平均声纹
+6. 用 `CAM++` 提取声纹 embedding
 7. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
+8. 将结果写出为统一的转写文档，再导出 `json / txt / srt`
+
+## 重构后的结构
+
+当前代码大致分成下面几层：
+
+- 入口层：
+  [main.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/main.py)、
+  [cli.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/cli.py)
+- 编排层：
+  [pipeline.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/pipeline.py)
+- 模型适配层：
+  [funasr_service.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/funasr_service.py)、
+  [pyannote_service.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/pyannote_service.py)、
+  [voiceprint_service.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/voiceprint_service.py)
+- 通用音频工具：
+  [audio.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/audio.py)
+- 转写领域模型：
+  [schemas.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/schemas.py)
+- 转写读写层：
+  [transcript_io.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/transcript_io.py)
+- 后处理脚本：
+  [export_voiceprint_samples.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/export_voiceprint_samples.py)
+
+## 核心数据模型
+
+重构后新增了两个核心对象：
+
+- `TranscriptSegment`
+  统一表示一个带时间轴的转写片段，可同时承载文本、说话人、来源、切片音频路径等信息
+- `TranscriptDocument`
+  统一表示一个音频文件的完整转写结果，包含 `segments`、`raw_segments`、输入音频路径、标准化音频路径和元数据
+
+这层模型定义在 [schemas.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/schemas.py)。
+
+兼容性说明：
+
+- 代码里仍保留了 `DiarizedSegment` 兼容别名，便于逐步迁移
+- JSON 输出仍保留 `local_speaker`，同时新增更通用的 `speaker_label`
+
+## SRT 相关基础能力
+
+当前已经有一层可复用的 SRT 读写能力，位于 [transcript_io.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/transcript_io.py)：
+
+- 可把统一转写文档写出为 `json / txt / srt`
+- 可把已有 `SRT` 解析为 `TranscriptSegment` 列表
+
+注意：
+
+- 目前仓库里还没有单独暴露“根据 SRT 切音频”的命令行脚本
+- 但底层能力已经具备：`load_srt_segments(...)` 可读字幕，`cut_audio_clip(...)` 可按时间切音频
+- 后续如果要加这个工作流，建议新增独立脚本，而不是继续塞进现有 `pipeline.py`
 
 ## 推荐环境
 
-这套组合更建议使用 `Python 3.10` 或 `Python 3.11`。你当前机器默认是 `Python 3.12.13`，代码我已经写成了兼容式封装，但安装依赖时建议单独建环境。
+推荐使用 `Python 3.10` 或 `Python 3.11`。
 
 ```powershell
 conda create -n cudavox python=3.10 -y
@@ -45,7 +104,7 @@ pip install -r requirements.txt
 
 ### 1. 安装 ffmpeg
 
-项目会用 `ffmpeg` 统一音频格式。
+项目会用 `ffmpeg` 做音频标准化、片段切分和样本导出。
 
 ```powershell
 ffmpeg -version
@@ -84,22 +143,6 @@ INPUT_FILES=.\input\a.mp3;.\input\b.wav
 python main.py
 ```
 
-导出人工核对声纹的人声样本：
-
-```powershell
-python .\scripts\export_voiceprint_samples.py
-```
-
-默认行为：
-
-- 扫描 `output/` 下所有转写结果 JSON
-- 基于 `raw_segments` 按 `speaker_id` 导出最多 3 段样本
-- 跳过空文本片段
-- 只导出单段时长不少于 10 秒的片段
-- 从原始 `input_file` 重新切出 `wav`
-- 输出目录为 `output/voiceprint_samples/`
-- 同时生成 `output/voiceprint_samples/voiceprint_samples.csv`
-
 如果 `INPUT_FILES` 为空，才会回退为处理整个 `input/` 目录。
 
 指定单个音频：
@@ -120,6 +163,24 @@ python main.py --config .\config.yaml
 python -m FunASRNano --input ".\input\2026-03-25 21_50_00.mp3"
 ```
 
+## 声纹样本导出
+
+导出人工核对声纹的人声样本：
+
+```powershell
+python .\scripts\export_voiceprint_samples.py
+```
+
+默认行为：
+
+- 扫描 `output/` 下所有转写结果 JSON
+- 基于 `raw_segments` 按 `speaker_id` 导出最多 3 段样本
+- 跳过空文本片段
+- 只导出单段时长不少于 10 秒的片段
+- 从原始 `input_file` 重新切出 `wav`
+- 输出目录为 `output/voiceprint_samples/`
+- 同时生成 `output/voiceprint_samples/voiceprint_samples.csv`
+
 ## 输出目录
 
 默认输出到 `./output`：
@@ -129,6 +190,19 @@ python -m FunASRNano --input ".\input\2026-03-25 21_50_00.mp3"
 - `output/<音频名>/<音频名>.srt`
 - `output/voiceprints/speakers.json`
 - `output/voiceprints/<speaker_id>.npy`
+- `output/voiceprint_samples/`
+
+## JSON 输出说明
+
+JSON 仍兼容原有字段，同时补充了更通用的字段，便于后续新增工作流：
+
+- `segments`: 合并后的片段
+- `raw_segments`: 合并前的原始片段
+- `speaker_label`: 当前文件内的本地说话人标签
+- `local_speaker`: 兼容旧逻辑保留的别名字段
+- `segment_audio_path`: 片段音频路径
+- `source`: 片段来源，例如 `diarization`
+- `metadata`: 文档级元数据
 
 ## 声纹姓名映射
 
@@ -164,9 +238,19 @@ speaker_0002=李四
 - `campp.similarity_threshold`: 声纹命中阈值，默认 `0.72`
 - `campp.relaxed_similarity_threshold`: 对已有稳定声纹启用保守复用的次级阈值，默认 `0.69`
 - `campp.named_similarity_threshold`: 对已命名说话人的跨音频复用阈值，默认 `0.64`
-- `VOICEPRINT_NAME_MAP`: 用 `speaker_id:姓名` 指定说话人显示名
 - `pyannote.num_speakers`: 已知说话人数时可直接指定
 - `pipeline.merge_gap_seconds`: 合并相邻同说话人片段的时间间隔
+
+## 后续扩展建议
+
+如果继续沿当前重构方向扩展，建议按独立工作流增加脚本，而不是继续让 `pipeline.py` 变胖：
+
+- `transcribe_audio.py`
+  负责“音频 -> TranscriptDocument”
+- `cut_audio_by_srt.py`
+  负责“读取 SRT -> 切音频”
+- `export_voiceprint_samples.py`
+  负责“历史结果 -> 声纹人工复核样本”
 
 ## 参考资料
 
