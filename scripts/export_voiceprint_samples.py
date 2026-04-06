@@ -7,7 +7,6 @@ import csv
 import json
 import logging
 import re
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from logging_config import get_logger, setup_logger
 
-from FunASRNano.audio import ensure_dir, ensure_ffmpeg
+from FunASRNano.audio import cut_audio_clip, ensure_dir, ensure_ffmpeg
 from FunASRNano.config import load_settings
 
 
@@ -146,44 +145,6 @@ def sanitize_filename(name: str) -> str:
     return normalized or "sample"
 
 
-def cut_sample(
-    ffmpeg_bin: str,
-    input_file: Path,
-    start: float,
-    duration: float,
-    output_file: Path,
-) -> None:
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    command = [
-        ffmpeg_bin,
-        "-y",
-        "-ss",
-        f"{start:.3f}",
-        "-t",
-        f"{duration:.3f}",
-        "-i",
-        str(input_file),
-        "-vn",
-        "-ac",
-        "1",
-        "-ar",
-        "16000",
-        str(output_file),
-    ]
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        check=False,
-        encoding="utf-8",
-        errors="ignore",
-    )
-    if result.returncode != 0:
-        raise RuntimeError(
-            result.stderr.strip() or result.stdout.strip() or "ffmpeg failed"
-        )
-
-
 def export_samples(
     selected: dict[str, list[SampleCandidate]],
     output_dir: Path,
@@ -208,12 +169,12 @@ def export_samples(
                 f"{speaker_id}__{index:02d}__{source_stem}__"
                 f"{int(round(sample.start * 1000)):010d}.wav"
             )
-            cut_sample(
-                ffmpeg_bin=ffmpeg_bin,
-                input_file=sample.input_file,
+            cut_audio_clip(
+                input_path=sample.input_file,
                 start=sample.start,
                 duration=sample.duration,
-                output_file=output_file,
+                output_path=output_file,
+                ffmpeg_bin=ffmpeg_bin,
             )
             written_rows.append(
                 {

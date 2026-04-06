@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
-from FunASRNano.schemas import DiarizedSegment, PyannoteSettings
+from FunASRNano.schemas import PyannoteSettings, TranscriptSegment
 
 
 class PyannoteDiarizer:
@@ -63,7 +63,7 @@ class PyannoteDiarizer:
             "uri": Path(audio_path).stem,
         }
 
-    def diarize(self, audio_path: str | Path) -> list[DiarizedSegment]:
+    def diarize(self, audio_path: str | Path) -> list[TranscriptSegment]:
         kwargs = {}
         if self.settings.num_speakers is not None:
             kwargs["num_speakers"] = self.settings.num_speakers
@@ -98,7 +98,7 @@ class PyannoteDiarizer:
             or result
         )
 
-        segments: list[DiarizedSegment] = []
+        segments: list[TranscriptSegment] = []
         for turn, _, speaker in annotation.itertracks(yield_label=True):
             start = round(float(turn.start), 3)
             end = round(float(turn.end), 3)
@@ -111,10 +111,11 @@ class PyannoteDiarizer:
                 )
                 continue
             segments.append(
-                DiarizedSegment(
+                TranscriptSegment(
                     start=start,
                     end=end,
-                    local_speaker=str(speaker),
+                    speaker_label=str(speaker),
+                    source="diarization",
                 )
             )
 

@@ -102,6 +102,58 @@ def extract_wav_segment(
     return output_file
 
 
+def cut_audio_clip(
+    input_path: str | Path,
+    start: float,
+    duration: float,
+    output_path: str | Path,
+    ffmpeg_bin: str = "ffmpeg",
+    sample_rate: int = 16000,
+    channels: int = 1,
+) -> Path:
+    ensure_ffmpeg(ffmpeg_bin)
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    command = [
+        ffmpeg_bin,
+        "-y",
+        "-ss",
+        f"{start:.3f}",
+        "-t",
+        f"{duration:.3f}",
+        "-i",
+        str(input_path),
+        "-vn",
+        "-ac",
+        str(channels),
+        "-ar",
+        str(sample_rate),
+        str(output_file),
+    ]
+    LOGGER.debug("执行 ffmpeg 切片命令: %s", " ".join(command))
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
+        errors="ignore",
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg 切片失败: {result.stderr.strip() or result.stdout.strip()}"
+        )
+
+    LOGGER.debug(
+        "导出音频切片: %s [%.3fs + %.3fs]",
+        output_file.resolve(),
+        start,
+        duration,
+    )
+    return output_file
+
+
 def build_profile_wav(
     wav_path: str | Path,
     spans: Iterable[tuple[float, float]],
