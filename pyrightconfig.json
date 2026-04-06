@@ -1,0 +1,18 @@
+{
+  "include": [
+    "FunASRNano",
+    "scripts",
+    "main.py",
+    "logging_config.py"
+  ],
+  "venvPath": "C:/Users/bcjt_/anaconda3/envs",
+  "venv": "cudavox",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        "."
+      ]
+    }
+  ]
+}

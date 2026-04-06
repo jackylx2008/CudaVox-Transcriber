@@ -39,6 +39,12 @@ pyannote:
 campp:
   model: ${CAMPP_MODEL:-iic/speech_campplus_sv_zh-cn_16k-common}
   similarity_threshold: ${CAMPP_SIMILARITY_THRESHOLD:-0.72}
+  relaxed_similarity_threshold: ${CAMPP_RELAXED_SIMILARITY_THRESHOLD:-0.69}
+  relaxed_similarity_margin: ${CAMPP_RELAXED_SIMILARITY_MARGIN:-0.04}
+  relaxed_min_samples: ${CAMPP_RELAXED_MIN_SAMPLES:-2}
+  named_similarity_threshold: ${CAMPP_NAMED_SIMILARITY_THRESHOLD:-0.64}
+  named_similarity_margin: ${CAMPP_NAMED_SIMILARITY_MARGIN:-0.08}
+  named_min_samples: ${CAMPP_NAMED_MIN_SAMPLES:-5}
   db_dir: ${VOICEPRINT_DB_DIR:-./output/voiceprints}
   metadata_file: ${VOICEPRINT_METADATA_FILE:-speakers.json}
   speaker_prefix: ${VOICEPRINT_SPEAKER_PREFIX:-speaker_}

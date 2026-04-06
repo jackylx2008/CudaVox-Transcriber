@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -54,6 +54,12 @@ class PyannoteSettings:
 class CamppSettings:
     model: str = "iic/speech_campplus_sv_zh-cn_16k-common"
     similarity_threshold: float = 0.72
+    relaxed_similarity_threshold: float = 0.69
+    relaxed_similarity_margin: float = 0.04
+    relaxed_min_samples: int = 2
+    named_similarity_threshold: float = 0.64
+    named_similarity_margin: float = 0.08
+    named_min_samples: int = 5
     db_dir: str = "./output/voiceprints"
     metadata_file: str = "speakers.json"
     speaker_prefix: str = "speaker_"
@@ -96,16 +102,52 @@ class VoiceprintIdentity:
 
 
 @dataclass
-class DiarizedSegment:
+class TranscriptSegment:
     start: float
     end: float
-    local_speaker: str
     text: str = ""
+    speaker_label: str = ""
     speaker_id: str = ""
     speaker_name: str = ""
     speaker_similarity: Optional[float] = None
-    segment_wav: Optional[str] = None
+    segment_audio_path: Optional[str] = None
+    source: str = ""
+    extras: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration(self) -> float:
         return max(0.0, self.end - self.start)
+
+    @property
+    def local_speaker(self) -> str:
+        return self.speaker_label
+
+    @local_speaker.setter
+    def local_speaker(self, value: str) -> None:
+        self.speaker_label = value
+
+    @property
+    def segment_wav(self) -> Optional[str]:
+        return self.segment_audio_path
+
+    @segment_wav.setter
+    def segment_wav(self, value: Optional[str]) -> None:
+        self.segment_audio_path = value
+
+
+@dataclass
+class TranscriptDocument:
+    input_file: str
+    normalized_wav: str
+    device: str
+    segments: list[TranscriptSegment] = field(default_factory=list)
+    raw_segments: list[TranscriptSegment] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def segment_count(self) -> int:
+        return len(self.segments)
+
+
+class DiarizedSegment(TranscriptSegment):
+    """Backward-compatible alias for older diarization-oriented naming."""

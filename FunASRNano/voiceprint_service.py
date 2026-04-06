@@ -5,8 +5,30 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, TypedDict, cast
 
 from FunASRNano.schemas import CamppSettings, VoiceprintIdentity
+
+
+class SpeakerInfo(TypedDict):
+    speaker_id: str
+    speaker_name: str
+    local_speaker_first_seen: str
+    embedding_path: str
+    num_samples: int
+    created_at: str
+    updated_at: str
+    source_files: list[str]
+
+
+class VoiceprintMetadata(TypedDict):
+    speakers: dict[str, SpeakerInfo]
+
+
+class RankedCandidate(TypedDict):
+    speaker_id: str
+    info: SpeakerInfo
+    score: float
 
 
 class VoiceprintStore:
@@ -17,22 +39,23 @@ class VoiceprintStore:
         self.db_dir = Path(settings.db_dir)
         self.db_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_path = self.db_dir / settings.metadata_file
-        self._pipeline = None
-        self._embedding_cache: dict[str, object] = {}
+        self._pipeline: Any | None = None
+        self._embedding_cache: dict[str, Any] = {}
         self.metadata = self._load_metadata()
         self._sync_speaker_names()
         self.logger.info(
             "声纹库初始化完成: db_dir=%s, 已登记说话人=%s",
             self.db_dir.resolve(),
-            len(self.metadata.get('speakers', {})),
+            len(self.metadata["speakers"]),
         )
 
-    def _load_metadata(self) -> dict:
+    def _load_metadata(self) -> VoiceprintMetadata:
         if not self.metadata_path.exists():
             self.logger.info("声纹元数据不存在，创建新库: %s", self.metadata_path.resolve())
             return {"speakers": {}}
         self.logger.debug("加载声纹元数据: %s", self.metadata_path.resolve())
-        return json.loads(self.metadata_path.read_text(encoding="utf-8"))
+        data = json.loads(self.metadata_path.read_text(encoding="utf-8"))
+        return cast(VoiceprintMetadata, data)
 
     def save(self) -> None:
         self.metadata_path.write_text(
@@ -65,7 +88,7 @@ class VoiceprintStore:
             self.logger.info("已从配置同步声纹姓名映射: %s 个", changed)
 
     @property
-    def pipeline(self):
+    def pipeline(self) -> Any:
         if self._pipeline is None:
             self._load_pipeline()
         return self._pipeline
@@ -94,7 +117,8 @@ class VoiceprintStore:
         import numpy as np
 
         self.logger.debug("开始提取声纹 embedding: %s", Path(audio_path).resolve())
-        result = self.pipeline([str(audio_path)], output_emb=True)
+        pipeline = self.pipeline
+        result = cast(dict[str, Any], pipeline([str(audio_path)], output_emb=True))
         embedding = result.get("embs")
         if embedding is None:
             raise RuntimeError("CAM++ 未返回声纹 embedding。")
@@ -108,35 +132,42 @@ class VoiceprintStore:
         source_file: str,
         local_speaker: str,
     ) -> VoiceprintIdentity:
-        best_id = None
-        best_score = -1.0
+        ranked = self._rank_candidates(embedding)
+        best = ranked[0] if ranked else None
 
-        for speaker_id, info in self.metadata["speakers"].items():
-            ref = self._load_embedding(Path(info["embedding_path"]))
-            score = self._cosine_similarity(embedding, ref)
-            if score > best_score:
-                best_score = score
-                best_id = speaker_id
-
-        if best_id and best_score >= self.settings.similarity_threshold:
-            info = self.metadata["speakers"][best_id]
-            new_embedding = self._update_existing(best_id, embedding, source_file)
-            self._embedding_cache[best_id] = new_embedding
-            self.logger.info(
-                "命中已有声纹: %s, similarity=%.4f, source=%s",
-                best_id,
-                best_score,
-                source_file,
-            )
-            return VoiceprintIdentity(
-                speaker_id=best_id,
-                speaker_name=info.get("speaker_name", best_id),
-                similarity=round(best_score, 4),
-                is_new=False,
-                embedding_path=info["embedding_path"],
+        if best is not None and best["score"] >= self.settings.similarity_threshold:
+            return self._match_existing_candidate(
+                best,
+                embedding=embedding,
+                source_file=source_file,
+                match_mode="strict",
             )
 
-        return self._create_new(embedding, source_file, local_speaker, best_score)
+        relaxed_candidate = self._select_relaxed_candidate(ranked)
+        if relaxed_candidate is not None:
+            return self._match_existing_candidate(
+                relaxed_candidate,
+                embedding=embedding,
+                source_file=source_file,
+                match_mode="relaxed",
+            )
+
+        named_candidate = self._select_named_candidate(ranked)
+        if named_candidate is not None:
+            return self._match_existing_candidate(
+                named_candidate,
+                embedding=embedding,
+                source_file=source_file,
+                match_mode="named",
+            )
+
+        return self._create_new(
+            embedding,
+            source_file,
+            local_speaker,
+            best["score"] if best is not None else -1.0,
+            best["speaker_id"] if best is not None else None,
+        )
 
     def create_transient_identity(self, local_speaker: str) -> VoiceprintIdentity:
         return VoiceprintIdentity(
@@ -153,6 +184,7 @@ class VoiceprintStore:
         source_file: str,
         local_speaker: str,
         best_score: float,
+        best_candidate_id: str | None,
     ) -> VoiceprintIdentity:
         speaker_id = f"{self.settings.speaker_prefix}{len(self.metadata['speakers']) + 1:04d}"
         embedding_path = self.db_dir / f"{speaker_id}.npy"
@@ -171,10 +203,11 @@ class VoiceprintStore:
         self._embedding_cache[speaker_id] = embedding
         self.save()
         self.logger.info(
-            "注册新声纹: %s, source=%s, best_similarity=%s",
+            "注册新声纹: %s, source=%s, best_similarity=%s, best_candidate=%s",
             speaker_id,
             source_file,
             round(best_score, 4) if best_score >= 0 else None,
+            best_candidate_id,
         )
         return VoiceprintIdentity(
             speaker_id=speaker_id,
@@ -219,6 +252,90 @@ class VoiceprintStore:
 
         np.save(path, embedding)
         self._embedding_cache[str(path.resolve())] = embedding
+
+    def _rank_candidates(self, embedding) -> list[RankedCandidate]:
+        ranked: list[RankedCandidate] = []
+        for speaker_id, info in self.metadata["speakers"].items():
+            ref = self._load_embedding(Path(info["embedding_path"]))
+            score = self._cosine_similarity(embedding, ref)
+            ranked.append(
+                {
+                    "speaker_id": speaker_id,
+                    "info": info,
+                    "score": score,
+                }
+            )
+        ranked.sort(key=lambda item: float(item["score"]), reverse=True)
+        return ranked
+
+    def _select_relaxed_candidate(
+        self,
+        ranked: list[RankedCandidate],
+    ) -> RankedCandidate | None:
+        if not ranked:
+            return None
+        candidate = ranked[0]
+        if float(candidate["score"]) < self.settings.relaxed_similarity_threshold:
+            return None
+        info = candidate["info"]
+        if int(info.get("num_samples", 1)) < self.settings.relaxed_min_samples:
+            return None
+
+        second_score = float(ranked[1]["score"]) if len(ranked) > 1 else -1.0
+        margin = float(candidate["score"]) - second_score
+        if margin < self.settings.relaxed_similarity_margin:
+            return None
+        return candidate
+
+    def _select_named_candidate(
+        self,
+        ranked: list[RankedCandidate],
+    ) -> RankedCandidate | None:
+        if not ranked:
+            return None
+        candidate = ranked[0]
+        info = candidate["info"]
+        speaker_id = str(candidate["speaker_id"])
+        speaker_name = info.get("speaker_name", speaker_id)
+        if speaker_name == speaker_id:
+            return None
+        if int(info.get("num_samples", 1)) < self.settings.named_min_samples:
+            return None
+        if float(candidate["score"]) < self.settings.named_similarity_threshold:
+            return None
+
+        second_score = float(ranked[1]["score"]) if len(ranked) > 1 else -1.0
+        margin = float(candidate["score"]) - second_score
+        if margin < self.settings.named_similarity_margin:
+            return None
+        return candidate
+
+    def _match_existing_candidate(
+        self,
+        candidate: RankedCandidate,
+        embedding,
+        source_file: str,
+        match_mode: str,
+    ) -> VoiceprintIdentity:
+        speaker_id = str(candidate["speaker_id"])
+        info = candidate["info"]
+        score = float(candidate["score"])
+        new_embedding = self._update_existing(speaker_id, embedding, source_file)
+        self._embedding_cache[speaker_id] = new_embedding
+        self.logger.info(
+            "命中已有声纹(%s): %s, similarity=%.4f, source=%s",
+            match_mode,
+            speaker_id,
+            score,
+            source_file,
+        )
+        return VoiceprintIdentity(
+            speaker_id=speaker_id,
+            speaker_name=info.get("speaker_name", speaker_id),
+            similarity=round(score, 4),
+            is_new=False,
+            embedding_path=info["embedding_path"],
+        )
 
     @staticmethod
     def _normalize(vector):

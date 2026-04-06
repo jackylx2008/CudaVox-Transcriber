@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import shutil
 from collections import defaultdict
@@ -16,12 +15,12 @@ from FunASRNano.audio import (
     convert_to_wav,
     ensure_dir,
     extract_wav_segment,
-    format_timestamp,
 )
 from FunASRNano.funasr_service import FunASRTranscriber
 from FunASRNano.pyannote_service import PyannoteDiarizer
 from FunASRNano.runtime import resolve_device
-from FunASRNano.schemas import DiarizedSegment, Settings
+from FunASRNano.schemas import Settings, TranscriptDocument, TranscriptSegment
+from FunASRNano.transcript_io import write_transcript_outputs
 from FunASRNano.voiceprint_service import VoiceprintStore
 
 
@@ -64,9 +63,10 @@ class CudaVoxPipeline:
         segments = self.diarizer.diarize(normalized_wav)
         self.logger.info("说话人分离完成: %s 个片段", len(segments))
         for index, segment in enumerate(segments, start=1):
-            segment_path = temp_dir / f"segment_{index:04d}_{segment.local_speaker}.wav"
+            speaker_label = segment.speaker_label or f"speaker_{index:04d}"
+            segment_path = temp_dir / f"segment_{index:04d}_{speaker_label}.wav"
             extract_wav_segment(normalized_wav, segment.start, segment.end, segment_path)
-            segment.segment_wav = str(segment_path)
+            segment.segment_audio_path = str(segment_path)
 
         identities = self._resolve_voiceprints(
             normalized_wav=normalized_wav,
@@ -76,12 +76,13 @@ class CudaVoxPipeline:
         )
 
         for segment in segments:
-            identity = identities.get(segment.local_speaker)
+            speaker_label = segment.speaker_label
+            identity = identities.get(speaker_label)
             if identity is None:
-                identity = self.voiceprints.create_transient_identity(segment.local_speaker)
+                identity = self.voiceprints.create_transient_identity(speaker_label)
 
-            if segment.segment_wav:
-                segment.text = self.transcriber.transcribe(segment.segment_wav)
+            if segment.segment_audio_path:
+                segment.text = self.transcriber.transcribe(segment.segment_audio_path)
             segment.speaker_id = identity.speaker_id
             segment.speaker_name = identity.speaker_name
             segment.speaker_similarity = identity.similarity
@@ -93,12 +94,23 @@ class CudaVoxPipeline:
             len(raw_segments),
             len(merged_segments),
         )
-        written_files = self._write_outputs(
-            input_file=input_file,
-            output_dir=output_dir,
-            normalized_wav=normalized_wav,
+        transcript = TranscriptDocument(
+            input_file=str(input_file.resolve()),
+            normalized_wav=str(normalized_wav.resolve()),
+            device=self.device,
             segments=merged_segments,
             raw_segments=raw_segments,
+            metadata={
+                "workflow": "diarization_transcription",
+                "merge_gap_seconds": self.settings.pipeline.merge_gap_seconds,
+            },
+        )
+        written_files = write_transcript_outputs(
+            document=transcript,
+            output_dir=output_dir,
+            output_stem=input_file.stem,
+            settings=self.settings.output,
+            logger=self.logger,
         )
 
         if self.settings.app.cleanup_temp:
@@ -113,18 +125,18 @@ class CudaVoxPipeline:
     def _resolve_voiceprints(
         self,
         normalized_wav: Path,
-        segments: list[DiarizedSegment],
+        segments: list[TranscriptSegment],
         temp_dir: Path,
         source_file: str,
     ):
         grouped: dict[str, list[tuple[float, float]]] = defaultdict(list)
         for segment in segments:
-            grouped[segment.local_speaker].append((segment.start, segment.end))
+            grouped[segment.speaker_label].append((segment.start, segment.end))
 
         self.logger.info("开始声纹归一化匹配，本地说话人数=%s", len(grouped))
         identities = {}
-        for local_speaker, spans in grouped.items():
-            profile_path = temp_dir / f"profile_{local_speaker}.wav"
+        for speaker_label, spans in grouped.items():
+            profile_path = temp_dir / f"profile_{speaker_label}.wav"
             total_seconds = build_profile_wav(
                 normalized_wav,
                 spans,
@@ -134,11 +146,11 @@ class CudaVoxPipeline:
             if total_seconds < self.settings.campp.min_profile_seconds:
                 self.logger.warning(
                     "说话人 %s 可用时长不足 %.2fs，改用临时身份。",
-                    local_speaker,
+                    speaker_label,
                     self.settings.campp.min_profile_seconds,
                 )
-                identities[local_speaker] = self.voiceprints.create_transient_identity(
-                    local_speaker
+                identities[speaker_label] = self.voiceprints.create_transient_identity(
+                    speaker_label
                 )
                 continue
 
@@ -146,24 +158,27 @@ class CudaVoxPipeline:
             identity = self.voiceprints.match_or_register(
                 embedding=embedding,
                 source_file=source_file,
-                local_speaker=local_speaker,
+                local_speaker=speaker_label,
             )
-            identities[local_speaker] = identity
+            identities[speaker_label] = identity
             self.logger.info(
                 "说话人 %s 归属为 %s，相似度=%s，新建=%s",
-                local_speaker,
+                speaker_label,
                 identity.speaker_id,
                 identity.similarity,
                 identity.is_new,
             )
         return identities
 
-    def _merge_segments(self, segments: list[DiarizedSegment]) -> list[DiarizedSegment]:
+    def _merge_segments(
+        self,
+        segments: list[TranscriptSegment],
+    ) -> list[TranscriptSegment]:
         if not segments:
             self.logger.warning("没有可合并的片段。")
             return []
 
-        merged: list[DiarizedSegment] = []
+        merged: list[TranscriptSegment] = []
         for current in sorted(segments, key=lambda item: (item.start, item.end)):
             segment = replace(current)
             if not merged:
@@ -173,7 +188,7 @@ class CudaVoxPipeline:
             previous = merged[-1]
             gap = segment.start - previous.end
             if (
-                previous.speaker_id == segment.speaker_id
+                self._speaker_key(previous) == self._speaker_key(segment)
                 and gap <= self.settings.pipeline.merge_gap_seconds
             ):
                 previous.end = segment.end
@@ -196,86 +211,10 @@ class CudaVoxPipeline:
             return left
         return f"{left}{right}"
 
-    def _write_outputs(
-        self,
-        input_file: Path,
-        output_dir: Path,
-        normalized_wav: Path,
-        segments: list[DiarizedSegment],
-        raw_segments: list[DiarizedSegment],
-    ) -> dict[str, str]:
-        payload = {
-            "input_file": str(input_file.resolve()),
-            "normalized_wav": str(normalized_wav.resolve()),
-            "device": self.device,
-            "segment_count": len(segments),
-            "segments": [
-                {
-                    "start": segment.start,
-                    "end": segment.end,
-                    "duration": round(segment.duration, 3),
-                    "local_speaker": segment.local_speaker,
-                    "speaker_id": segment.speaker_id,
-                    "speaker_name": segment.speaker_name,
-                    "speaker_similarity": segment.speaker_similarity,
-                    "text": segment.text,
-                }
-                for segment in segments
-            ],
-            "raw_segments": [
-                {
-                    "start": segment.start,
-                    "end": segment.end,
-                    "duration": round(segment.duration, 3),
-                    "local_speaker": segment.local_speaker,
-                    "speaker_id": segment.speaker_id,
-                    "speaker_name": segment.speaker_name,
-                    "speaker_similarity": segment.speaker_similarity,
-                    "text": segment.text,
-                }
-                for segment in raw_segments
-            ],
-        }
-
-        written_files: dict[str, str] = {}
-        if self.settings.output.write_json:
-            json_path = output_dir / f"{input_file.stem}.json"
-            json_path.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            written_files["json"] = str(json_path.resolve())
-            self.logger.info("已写出 JSON: %s", json_path.resolve())
-
-        if self.settings.output.write_txt:
-            txt_path = output_dir / f"{input_file.stem}.txt"
-            txt_lines = []
-            for index, segment in enumerate(segments, start=1):
-                txt_lines.append(str(index))
-                txt_lines.append(
-                    f"{format_timestamp(segment.start)} --> {format_timestamp(segment.end)} "
-                    f"（{segment.speaker_name}）"
-                )
-                txt_lines.append("")
-                txt_lines.append(segment.text or "")
-                txt_lines.append("")
-            txt_path.write_text("\n".join(txt_lines).strip() + "\n", encoding="utf-8")
-            written_files["txt"] = str(txt_path.resolve())
-            self.logger.info("已写出 TXT: %s", txt_path.resolve())
-
-        if self.settings.output.write_srt:
-            srt_path = output_dir / f"{input_file.stem}.srt"
-            blocks = []
-            for index, segment in enumerate(segments, start=1):
-                blocks.append(str(index))
-                blocks.append(
-                    f"{format_timestamp(segment.start)} --> {format_timestamp(segment.end)}"
-                )
-                blocks.append(segment.speaker_name)
-                blocks.append(segment.text or "")
-                blocks.append("")
-            srt_path.write_text("\n".join(blocks).strip() + "\n", encoding="utf-8")
-            written_files["srt"] = str(srt_path.resolve())
-            self.logger.info("已写出 SRT: %s", srt_path.resolve())
-
-        return written_files
+    @staticmethod
+    def _speaker_key(segment: TranscriptSegment) -> tuple[str, str, str]:
+        return (
+            segment.speaker_id,
+            segment.speaker_name,
+            segment.speaker_label,
+        )

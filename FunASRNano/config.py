@@ -21,6 +21,7 @@ from FunASRNano.schemas import (
 )
 
 ENV_PATTERN = re.compile(r"\$\{([A-Z0-9_]+)(?::-([^}]*))?\}")
+DEFAULT_VOICEPRINT_NAME_MAP_ENV = "voiceprint_name_map.env"
 LOGGER = get_logger(__name__)
 
 
@@ -94,6 +95,48 @@ def _parse_speaker_name_map(raw_value: str) -> dict[str, str]:
     return mapping
 
 
+def _parse_speaker_name_map_file(file_path: Path) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for line_number, raw_line in enumerate(
+        file_path.read_text(encoding="utf-8").splitlines(),
+        start=1,
+    ):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if line.startswith("VOICEPRINT_NAME_MAP="):
+            legacy_value = line.split("=", 1)[1].strip()
+            mapping.update(_parse_speaker_name_map(legacy_value))
+            continue
+
+        if "=" not in line:
+            raise ValueError(
+                f"{file_path.name} 第 {line_number} 行格式错误，必须使用 "
+                "speaker_id=姓名，例如 speaker_0001=张三"
+            )
+
+        speaker_id, speaker_name = line.split("=", 1)
+        speaker_id = speaker_id.strip()
+        speaker_name = speaker_name.strip()
+        if not speaker_id or not speaker_name:
+            raise ValueError(
+                f"{file_path.name} 第 {line_number} 行格式错误，speaker_id 和 姓名 都不能为空。"
+            )
+        mapping[speaker_id] = speaker_name
+    return mapping
+
+
+def _resolve_secret_env_file(
+    base_env_file: Path,
+    secret_file_name: str = DEFAULT_VOICEPRINT_NAME_MAP_ENV,
+) -> Path:
+    secret_path = Path(secret_file_name)
+    if secret_path.is_absolute():
+        return secret_path
+    return base_env_file.parent / secret_path
+
+
 def load_settings(
     config_path: str | Path = "config.yaml",
     env_path: str | Path = "common.env",
@@ -106,6 +149,8 @@ def load_settings(
         load_dotenv(env_file, override=False)
     else:
         LOGGER.warning("环境变量文件不存在，跳过加载: %s", env_file.resolve())
+
+    secret_env_file = _resolve_secret_env_file(env_file)
 
     config_file = Path(config_path)
     if not config_file.exists():
@@ -130,7 +175,13 @@ def load_settings(
     if raw_speaker_name_map:
         settings.campp.speaker_name_map = _parse_speaker_name_map(raw_speaker_name_map)
         LOGGER.info(
-            "从 .env 读取到声纹姓名映射数量: %s",
+            "从环境变量读取到声纹姓名映射数量: %s",
+            len(settings.campp.speaker_name_map),
+        )
+    if secret_env_file.exists():
+        settings.campp.speaker_name_map = _parse_speaker_name_map_file(secret_env_file)
+        LOGGER.info(
+            "从私密映射文件读取到声纹姓名映射数量: %s",
             len(settings.campp.speaker_name_map),
         )
     LOGGER.info(

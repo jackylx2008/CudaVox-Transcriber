@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from FunASRNano.schemas import FunASRSettings
 
@@ -15,11 +15,11 @@ class FunASRTranscriber:
         self.settings = settings
         self.device = device
         self.logger = logger
-        self._model = None
-        self._postprocess = None
+        self._model: Any | None = None
+        self._postprocess: Any | None = None
 
     @property
-    def model(self):
+    def model(self) -> Any:
         if self._model is None:
             self._load()
         return self._model
@@ -36,7 +36,7 @@ class FunASRTranscriber:
         if self._uses_fun_asr_nano():
             self._ensure_fun_asr_nano_registered(tables)
 
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "model": self.settings.model,
             "hub": self.settings.hub,
             "device": self.device,
@@ -82,9 +82,8 @@ class FunASRTranscriber:
         if itn is not None:
             generate_kwargs["itn"] = itn
 
-        result = self.model.generate(
-            **generate_kwargs,
-        )
+        model = self.model
+        result = model.generate(**generate_kwargs)
         text = self._extract_text(result).strip()
         if text and self._postprocess is not None:
             try:
@@ -135,7 +134,10 @@ class FunASRTranscriber:
 
         import funasr
 
-        nano_dir = Path(funasr.__file__).resolve().parent / "models" / "fun_asr_nano"
+        funasr_file = getattr(funasr, "__file__", None)
+        if not funasr_file:
+            raise FileNotFoundError("无法定位 funasr 包目录。")
+        nano_dir = Path(cast(str, funasr_file)).resolve().parent / "models" / "fun_asr_nano"
         if not nano_dir.exists():
             raise FileNotFoundError(f"找不到 Fun-ASR-Nano 代码目录: {nano_dir}")
 

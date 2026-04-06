@@ -138,6 +138,7 @@ celerybeat.pid
 # Environments
 .env
 common.env
+voiceprint_name_map.env
 .venv
 env/
 venv/
