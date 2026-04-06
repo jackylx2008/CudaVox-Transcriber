@@ -84,6 +84,22 @@ INPUT_FILES=.\input\a.mp3;.\input\b.wav
 python main.py
 ```
 
+导出人工核对声纹的人声样本：
+
+```powershell
+python .\scripts\export_voiceprint_samples.py
+```
+
+默认行为：
+
+- 扫描 `output/` 下所有转写结果 JSON
+- 基于 `raw_segments` 按 `speaker_id` 导出最多 3 段样本
+- 跳过空文本片段
+- 只导出单段时长不少于 10 秒的片段
+- 从原始 `input_file` 重新切出 `wav`
+- 输出目录为 `output/voiceprint_samples/`
+- 同时生成 `output/voiceprint_samples/voiceprint_samples.csv`
+
 如果 `INPUT_FILES` 为空，才会回退为处理整个 `input/` 目录。
 
 指定单个音频：
@@ -116,18 +132,20 @@ python -m FunASRNano --input ".\input\2026-03-25 21_50_00.mp3"
 
 ## 声纹姓名映射
 
-如果你希望转写结果直接显示人名，而不是 `speaker_0001` 这类 ID，可以在 [common.env](/d:/CloudStation/Python/Project/CudaVox-Transcriber/common.env) 里配置：
+如果你希望转写结果直接显示人名，而不是 `speaker_0001` 这类 ID，可以单独放到私密文件 `voiceprint_name_map.env` 里：
 
-```env
-VOICEPRINT_NAME_MAP=speaker_0001:张三;speaker_0002:李四
+```text
+speaker_0001=张三
+speaker_0002=李四
 ```
 
 说明：
 
-- 使用格式 `speaker_id:姓名`
-- 多个映射用英文分号分隔
+- `voiceprint_name_map.env` 默认不会同步到 git，适合放人名这类敏感映射
+- 使用格式 `speaker_id=姓名`
+- 一行一个映射，方便人工维护
 - 只需要维护 `speaker_id` 到姓名的对应关系，不要手动改 `.npy` 文件名
-- 程序启动时会自动把这个映射同步到 `output/voiceprints/speakers.json`
+- 程序启动时会自动先加载 [common.env](/d:/CloudStation/Python/Project/CudaVox-Transcriber/common.env)，再加载 `voiceprint_name_map.env`，并把这个映射同步到 `output/voiceprints/speakers.json`
 - 后续输出的 `json / txt / srt` 会直接带上这个姓名
 
 如果映射里写了不存在的 `speaker_id`，程序会跳过并在日志里提示。
