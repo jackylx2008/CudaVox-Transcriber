@@ -21,13 +21,15 @@
 
 1. 把输入音频统一转成 `16kHz / mono / wav`
 2. 用 `pyannote/speaker-diarization-community-1` 做说话人分离
-3. 按片段切分临时音频
-4. 用 `Qwen3-ASR-1.7B` 做原始听写
-5. 用 `Qwen3.6-27B` 做文本整理，并在整文件完成后生成摘要
-6. 把同一文件里的本地说话人片段拼成 profile 音频
-7. 用 `CAM++` 提取声纹 embedding
-8. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
-9. 将结果写出为统一的转写文档，再导出 `json / txt / srt`
+3. 先完成声纹归一化匹配
+4. 合并相邻同说话人的短片段，减少 ASR 请求次数
+5. 按合并后的片段切分临时音频
+6. 用 `Qwen3-ASR-1.7B` 做原始听写
+7. 默认跳过逐段 `Qwen3.6-27B` 文本整理，仅在整文件完成后生成摘要
+8. 把同一文件里的本地说话人片段拼成 profile 音频
+9. 用 `CAM++` 提取声纹 embedding
+10. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
+11. 将结果写出为统一的转写文档，再导出 `json / txt / srt`
 
 ## 重构后的结构
 
@@ -54,7 +56,7 @@
 - 后处理脚本：
   [export_voiceprint_samples.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/export_voiceprint_samples.py)
 
-项目进度和当前维护状态记录在 [PROJECET_PROGRESS.md](/d:/CloudStation/Python/Project/CudaVox-Transcriber/PROJECET_PROGRESS.md)。
+项目进度和当前维护状态记录在 [PROJECT_PROGRESS.md](/d:/CloudStation/Python/Project/CudaVox-Transcriber/PROJECT_PROGRESS.md)。
 
 ## 核心数据模型
 
@@ -221,6 +223,15 @@ JSON 仍兼容原有字段，同时补充了更通用的字段，便于后续新
 - `source`: 片段来源，例如 `diarization`
 - `metadata`: 文档级元数据，包含 `dictation_model`、`text_model`，以及启用时的 `summary`
 
+当前为了减少 Qwen HTTP 请求，程序先把相邻同说话人的 diarization 片段合并为 ASR 目标片段，再切音频并调用 Qwen3-ASR。`raw_segments` 仍保留原始 diarization 片段，并在 `extras.transcribed_segment_index` 中记录它归属的合并听写片段。
+
+## 当前性能记录
+
+使用 `input/2026-04-13 09_46_37.mp3` 在本机 Qwen3-ASR + Qwen3.6 配置下测试：
+
+- 优化前：约 24 分钟，主要耗时来自逐段 Qwen3.6 文本整理和 80 次片段化 ASR 调用。
+- 优化后：608.20 秒，约 10.14 分钟；80 个原始 diarization 片段先合并为 66 个 ASR 片段，且逐段文本整理关闭，只保留整文件摘要。
+
 ## 声纹姓名映射
 
 如果你希望转写结果直接显示人名，而不是 `speaker_0001` 这类 ID，可以单独放到私密文件 `voiceprint_name_map.env` 里：
@@ -253,7 +264,11 @@ speaker_0002=李四
 - `qwen.asr_endpoint`: ASR 调用方式，默认 `chat_completions`，也可设为 `audio_transcriptions`
 - `qwen.llm_base_url`: 文本整理模型 API 地址，默认读取 `LLAMACPP_BASE_URL`
 - `qwen.llm_model`: 文本整理和总结模型，默认读取 `LLAMACPP_MODEL`
-- `qwen.enable_text_refinement`: 是否用 Qwen3.6 整理每段听写文本
+- `qwen.enable_text_refinement`: 是否用 Qwen3.6 整理每段听写文本，默认 `false`
+- `qwen.refinement_max_tokens`: 逐段整理 token 上限，默认 `256`
+- `qwen.summary_max_tokens`: 整文件总结 token 上限，默认 `512`
+- `qwen.summary_input_max_chars`: 送入整文件总结的最大字符数，默认 `5000`
+- `qwen.refinement_min_duration_seconds`: 短于该时长的片段跳过逐段整理，默认 `2.0`
 - `qwen.enable_summary`: 是否在 JSON `metadata.summary` 中写入整文件摘要
 - `campp.similarity_threshold`: 声纹命中阈值，默认 `0.72`
 - `campp.relaxed_similarity_threshold`: 对已有稳定声纹启用保守复用的次级阈值，默认 `0.69`
@@ -271,6 +286,7 @@ speaker_0002=李四
   负责“读取 SRT -> 切音频”
 - `export_voiceprint_samples.py`
   负责“历史结果 -> 声纹人工复核样本”
+- 可选保留 `FunASR` 或 `SenseVoice` 作为快速 ASR 后端。Qwen3-ASR 更灵活，但本地多模态 LLM 的 HTTP/片段化调用成本高；专用 ASR pipeline 在吞吐上通常更快。
 
 ## 参考资料
 

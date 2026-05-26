@@ -38,10 +38,11 @@ class QwenSettings:
     request_timeout_seconds: int = 300
     temperature: float = 0.0
     asr_max_tokens: int = 1024
-    refinement_max_tokens: int = 1024
-    summary_max_tokens: int = 1024
-    summary_input_max_chars: int = 12000
-    enable_text_refinement: bool = True
+    refinement_max_tokens: int = 256
+    summary_max_tokens: int = 512
+    summary_input_max_chars: int = 5000
+    refinement_min_duration_seconds: float = 2.0
+    enable_text_refinement: bool = False
     enable_summary: bool = True
     dictation_prompt: str = "请逐字听写这段中文语音，只输出听写文本。"
     refinement_prompt: str = (

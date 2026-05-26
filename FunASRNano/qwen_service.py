@@ -33,6 +33,27 @@ class QwenTranscriber:
             return raw_text
         return refined_text or raw_text
 
+    def transcribe_segment(self, segment: TranscriptSegment) -> str:
+        if not segment.segment_audio_path:
+            return ""
+
+        raw_text = self._dictate_audio(Path(segment.segment_audio_path)).strip()
+        if not raw_text:
+            return ""
+
+        if (
+            not self.settings.enable_text_refinement
+            or segment.duration < self.settings.refinement_min_duration_seconds
+        ):
+            return raw_text
+
+        try:
+            refined_text = self._refine_text(raw_text).strip()
+        except Exception as exc:
+            self.logger.warning("Qwen 文本整理失败，保留原始听写文本: %s", exc)
+            return raw_text
+        return refined_text or raw_text
+
     def summarize(self, segments: list[TranscriptSegment]) -> str:
         if not self.settings.enable_summary:
             return ""

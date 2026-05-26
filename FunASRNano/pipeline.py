@@ -62,12 +62,6 @@ class CudaVoxPipeline:
 
         segments = self.diarizer.diarize(normalized_wav)
         self.logger.info("说话人分离完成: %s 个片段", len(segments))
-        for index, segment in enumerate(segments, start=1):
-            speaker_label = segment.speaker_label or f"speaker_{index:04d}"
-            segment_path = temp_dir / f"segment_{index:04d}_{speaker_label}.wav"
-            extract_wav_segment(normalized_wav, segment.start, segment.end, segment_path)
-            segment.segment_audio_path = str(segment_path)
-
         identities = self._resolve_voiceprints(
             normalized_wav=normalized_wav,
             segments=segments,
@@ -81,16 +75,28 @@ class CudaVoxPipeline:
             if identity is None:
                 identity = self.voiceprints.create_transient_identity(speaker_label)
 
-            if segment.segment_audio_path:
-                segment.text = self.transcriber.transcribe(segment.segment_audio_path)
             segment.speaker_id = identity.speaker_id
             segment.speaker_name = identity.speaker_name
             segment.speaker_similarity = identity.similarity
 
-        raw_segments = [replace(segment) for segment in segments]
+        raw_segments = [self._copy_segment(segment) for segment in segments]
         merged_segments = self._merge_segments(segments)
         self.logger.info(
-            "文本合并完成: 原始片段=%s, 合并后片段=%s",
+            "ASR 前合并完成: 原始片段=%s, ASR 目标片段=%s",
+            len(raw_segments),
+            len(merged_segments),
+        )
+
+        for index, segment in enumerate(merged_segments, start=1):
+            speaker_label = segment.speaker_label or f"speaker_{index:04d}"
+            segment_path = temp_dir / f"asr_segment_{index:04d}_{speaker_label}.wav"
+            extract_wav_segment(normalized_wav, segment.start, segment.end, segment_path)
+            segment.segment_audio_path = str(segment_path)
+            segment.text = self.transcriber.transcribe_segment(segment)
+
+        self._annotate_raw_segments(raw_segments, merged_segments)
+        self.logger.info(
+            "文本转写完成: 原始片段=%s, 输出片段=%s",
             len(raw_segments),
             len(merged_segments),
         )
@@ -99,6 +105,9 @@ class CudaVoxPipeline:
             "merge_gap_seconds": self.settings.pipeline.merge_gap_seconds,
             "dictation_model": self.settings.qwen.asr_model,
             "text_model": self.settings.qwen.llm_model,
+            "raw_segment_count": len(raw_segments),
+            "asr_segment_count": len(merged_segments),
+            "text_refinement_enabled": self.settings.qwen.enable_text_refinement,
         }
         summary = self.transcriber.summarize(merged_segments)
         if summary:
@@ -128,6 +137,32 @@ class CudaVoxPipeline:
 
         self.logger.info("处理完成: %s", input_file)
         return written_files
+
+    @staticmethod
+    def _copy_segment(segment: TranscriptSegment) -> TranscriptSegment:
+        copied = replace(segment)
+        copied.extras = dict(segment.extras)
+        return copied
+
+    @staticmethod
+    def _annotate_raw_segments(
+        raw_segments: list[TranscriptSegment],
+        merged_segments: list[TranscriptSegment],
+    ) -> None:
+        for raw_segment in raw_segments:
+            for index, merged_segment in enumerate(merged_segments, start=1):
+                if (
+                    raw_segment.start >= merged_segment.start
+                    and raw_segment.end <= merged_segment.end
+                    and CudaVoxPipeline._speaker_key(raw_segment)
+                    == CudaVoxPipeline._speaker_key(merged_segment)
+                ):
+                    raw_segment.text = merged_segment.text
+                    raw_segment.extras["transcribed_segment_index"] = index
+                    raw_segment.extras["transcribed_segment_audio_path"] = (
+                        merged_segment.segment_audio_path
+                    )
+                    break
 
     def _resolve_voiceprints(
         self,
@@ -187,7 +222,7 @@ class CudaVoxPipeline:
 
         merged: list[TranscriptSegment] = []
         for current in sorted(segments, key=lambda item: (item.start, item.end)):
-            segment = replace(current)
+            segment = self._copy_segment(current)
             if not merged:
                 merged.append(segment)
                 continue
