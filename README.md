@@ -54,6 +54,8 @@
 - 转写读写层：
   [transcript_io.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/transcript_io.py)
 - 后处理脚本：
+  [transcribe_audio.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/transcribe_audio.py)、
+  [cut_audio_by_srt.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/cut_audio_by_srt.py)、
   [export_voiceprint_samples.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/export_voiceprint_samples.py)
 
 项目进度和当前维护状态记录在 [PROJECT_PROGRESS.md](/d:/CloudStation/Python/Project/CudaVox-Transcriber/PROJECT_PROGRESS.md)。
@@ -81,11 +83,7 @@
 - 可把统一转写文档写出为 `json / txt / srt`
 - 可把已有 `SRT` 解析为 `TranscriptSegment` 列表
 
-注意：
-
-- 目前仓库里还没有单独暴露“根据 SRT 切音频”的命令行脚本
-- 但底层能力已经具备：`load_srt_segments(...)` 可读字幕，`cut_audio_clip(...)` 可按时间切音频
-- 后续如果要加这个工作流，建议新增独立脚本，而不是继续塞进现有 `pipeline.py`
+已经单独暴露“根据 SRT 切音频”的命令行脚本，位于 [cut_audio_by_srt.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/cut_audio_by_srt.py)。它复用 `load_srt_segments(...)` 读取字幕，复用 `cut_audio_clip(...)` 按时间切音频，并输出 `wav` 片段和 `clips.csv` 清单。
 
 ## 推荐环境
 
@@ -171,6 +169,22 @@ python main.py --config .\config.yaml
 
 ```powershell
 python -m FunASRNano --input ".\input\2026-03-25 21_50_00.mp3"
+```
+
+## 独立工作流脚本
+
+只运行“音频 -> TranscriptDocument -> json/txt/srt”的独立转写工作流：
+
+```powershell
+python .\scripts\transcribe_audio.py --input ".\input\2026-03-25 21_50_00.mp3"
+```
+
+根据已有 SRT 切音频片段，并生成 `clips.csv` 清单：
+
+```powershell
+python .\scripts\cut_audio_by_srt.py `
+  --audio ".\input\2026-03-25 21_50_00.mp3" `
+  --srt ".\output\2026-03-25 21_50_00\2026-03-25 21_50_00.srt"
 ```
 
 ## 声纹样本导出
@@ -280,11 +294,11 @@ speaker_0002=李四
 
 如果继续沿当前重构方向扩展，建议按独立工作流增加脚本，而不是继续让 `pipeline.py` 变胖：
 
-- `transcribe_audio.py`
+- [transcribe_audio.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/transcribe_audio.py)
   负责“音频 -> TranscriptDocument”
-- `cut_audio_by_srt.py`
+- [cut_audio_by_srt.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/cut_audio_by_srt.py)
   负责“读取 SRT -> 切音频”
-- `export_voiceprint_samples.py`
+- [export_voiceprint_samples.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/export_voiceprint_samples.py)
   负责“历史结果 -> 声纹人工复核样本”
 - 可选保留 `FunASR` 或 `SenseVoice` 作为快速 ASR 后端。Qwen3-ASR 更灵活，但本地多模态 LLM 的 HTTP/片段化调用成本高；专用 ASR pipeline 在吞吐上通常更快。
 

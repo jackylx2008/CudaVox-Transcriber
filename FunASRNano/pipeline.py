@@ -45,15 +45,14 @@ class CudaVoxPipeline:
         self.transcriber = QwenTranscriber(settings.qwen, self.logger)
         self.voiceprints = VoiceprintStore(settings.campp, self.device, self.logger)
 
-    def process_file(self, input_path: str | Path) -> dict[str, str]:
+    def transcribe_file(self, input_path: str | Path) -> TranscriptDocument:
         input_file = Path(input_path)
         stem = input_file.stem
-        output_dir = ensure_dir(Path(self.settings.app.output_dir) / stem)
         temp_dir = ensure_dir(Path(self.settings.app.temp_dir) / stem)
         normalized_wav = temp_dir / f"{stem}_normalized.wav"
 
         self.logger.info("开始处理: %s", input_file)
-        self.logger.debug("输出目录: %s, 临时目录: %s", output_dir.resolve(), temp_dir.resolve())
+        self.logger.debug("临时目录: %s", temp_dir.resolve())
         convert_to_wav(
             input_file,
             normalized_wav,
@@ -121,6 +120,13 @@ class CudaVoxPipeline:
             raw_segments=raw_segments,
             metadata=metadata,
         )
+        return transcript
+
+    def process_file(self, input_path: str | Path) -> dict[str, str]:
+        input_file = Path(input_path)
+        output_dir = ensure_dir(Path(self.settings.app.output_dir) / input_file.stem)
+        self.logger.debug("输出目录: %s", output_dir.resolve())
+        transcript = self.transcribe_file(input_file)
         written_files = write_transcript_outputs(
             document=transcript,
             output_dir=output_dir,
@@ -129,6 +135,7 @@ class CudaVoxPipeline:
             logger=self.logger,
         )
 
+        temp_dir = Path(self.settings.app.temp_dir) / input_file.stem
         if self.settings.app.cleanup_temp:
             shutil.rmtree(temp_dir, ignore_errors=True)
             self.logger.debug("已清理临时目录: %s", temp_dir.resolve())

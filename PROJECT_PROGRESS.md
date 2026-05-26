@@ -16,6 +16,7 @@ The main workflow is already functional:
 - Extract speaker embeddings with `CAM++`.
 - Persist and reuse speaker IDs across audio files.
 - Export `json`, `txt`, and `srt` results.
+- Run standalone workflow scripts for audio transcription and SRT-based audio cutting.
 - Export voiceprint review samples from historical JSON outputs.
 
 ## Recent Changes
@@ -38,6 +39,10 @@ The main workflow is already functional:
   - capped whole-file summary input at 5000 characters to stay under the 8192-token local context;
   - merged diarization segments before cutting audio and calling Qwen3-ASR;
   - preserved raw diarization segments with `extras.transcribed_segment_index`.
+- Added standalone workflow scripts:
+  - `scripts/transcribe_audio.py` for audio-to-`TranscriptDocument` outputs;
+  - `scripts/cut_audio_by_srt.py` for SRT timeline based audio cutting and CSV manifests.
+- Split `CudaVoxPipeline.transcribe_file(...)` from `process_file(...)`, so callers can obtain a `TranscriptDocument` before deciding how to write or post-process it.
 
 ## Validation
 
@@ -52,6 +57,9 @@ python -m flake8 FunASRNano scripts main.py
 Current local validation notes:
 
 - `compileall` passed with the `cudavox` conda environment.
+- `scripts/transcribe_audio.py --help` passed.
+- `scripts/cut_audio_by_srt.py --help` passed.
+- `scripts/cut_audio_by_srt.py` smoke test wrote 1 clip and `clips.csv` using an existing SRT timeline and the currently available local mp3.
 - `flake8` is not installed in the current `cudavox` conda environment, so the lint command could not run there.
 - `input/2026-04-13 09_46_37.mp3` completed successfully with Qwen3-ASR + Qwen3.6.
 - The output JSON contains 66 merged ASR segments, 80 raw diarization segments, 0 empty final text segments, and a generated whole-file summary.
@@ -73,6 +81,5 @@ Current local validation notes:
 
 ## Next Candidates
 
-- Add an independent `cut_audio_by_srt.py` workflow using existing SRT parsing and audio cutting helpers.
-- Add a standalone transcription-only workflow for cases that do not need diarization or voiceprint matching.
+- Add a true transcription-only workflow mode that skips diarization and voiceprint matching when speaker attribution is not needed.
 - Add focused tests around configuration loading, transcript serialization, and logging setup compatibility.
