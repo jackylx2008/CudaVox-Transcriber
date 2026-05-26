@@ -43,12 +43,17 @@
   [voiceprint_service.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/voiceprint_service.py)
 - 通用音频工具：
   [audio.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/audio.py)
+- 日志配置：
+  [logging_config.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/logging_config.py)、
+  [logging_utils.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/logging_utils.py)
 - 转写领域模型：
   [schemas.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/schemas.py)
 - 转写读写层：
   [transcript_io.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/transcript_io.py)
 - 后处理脚本：
   [export_voiceprint_samples.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/scripts/export_voiceprint_samples.py)
+
+项目进度和当前维护状态记录在 [PROJECET_PROGRESS.md](/d:/CloudStation/Python/Project/CudaVox-Transcriber/PROJECET_PROGRESS.md)。
 
 ## 核心数据模型
 
@@ -191,6 +196,15 @@ python .\scripts\export_voiceprint_samples.py
 - `output/voiceprints/speakers.json`
 - `output/voiceprints/<speaker_id>.npy`
 - `output/voiceprint_samples/`
+
+## 日志配置
+
+日志配置不放在项目根目录，统一放在包内：
+
+- [FunASRNano/logging_config.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/logging_config.py)：项目复用的统一日志配置
+- [FunASRNano/logging_utils.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/logging_utils.py)：本项目的兼容封装，负责保留项目内 `log/` 输出目录和 `reset_log` 行为
+
+代码中应通过 `FunASRNano.logging_config` 或 `FunASRNano.logging_utils` 导入日志能力，不再从项目根目录导入 `logging_config`。
 
 ## JSON 输出说明
 

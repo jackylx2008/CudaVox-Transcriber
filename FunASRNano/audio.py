@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Iterable
 
-from logging_config import get_logger
+from FunASRNano.logging_config import get_logger
 
 LOGGER = get_logger(__name__)
 

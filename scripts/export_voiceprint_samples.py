@@ -15,10 +15,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from logging_config import get_logger, setup_logger  # noqa: E402
-
 from FunASRNano.audio import cut_audio_clip, ensure_dir, ensure_ffmpeg  # noqa: E402
 from FunASRNano.config import load_settings  # noqa: E402
+from FunASRNano.logging_config import get_logger  # noqa: E402
+from FunASRNano.logging_utils import setup_project_logger  # noqa: E402
 
 
 LOGGER = get_logger(__name__)
@@ -218,7 +218,7 @@ def main() -> int:
     args = parse_args()
     settings = load_settings(args.config, args.env_file)
     level = getattr(logging, settings.app.log_level.upper(), logging.INFO)
-    setup_logger(log_level=level)
+    setup_project_logger(log_level=level)
 
     results_root = Path(args.results_root)
     output_dir = Path(args.output_dir)

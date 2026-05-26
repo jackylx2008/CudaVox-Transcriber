@@ -6,10 +6,10 @@ import argparse
 import logging
 from pathlib import Path
 
-from logging_config import get_logger, setup_logger
-
 from FunASRNano.audio import resolve_audio_files
 from FunASRNano.config import load_settings
+from FunASRNano.logging_config import get_logger
+from FunASRNano.logging_utils import setup_project_logger
 from FunASRNano.pipeline import CudaVoxPipeline
 
 
@@ -30,13 +30,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    setup_logger(log_level=logging.INFO, reset_log=True)
+    setup_project_logger(log_level=logging.INFO, reset_log=True)
     logger = get_logger(__name__)
     args = build_parser().parse_args(argv)
     logger.info("CLI 启动，开始加载配置。")
     settings = load_settings(args.config, args.env_file)
     level = getattr(logging, settings.app.log_level.upper(), logging.INFO)
-    setup_logger(log_level=level, reset_log=True)
+    setup_project_logger(log_level=level, reset_log=True)
     logger = get_logger(__name__)
 
     if args.input:

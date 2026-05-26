@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from logging_config import get_logger
+from FunASRNano.logging_config import get_logger
 
 LOGGER = get_logger(__name__)
 

@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from logging_config import get_logger
+from FunASRNano.logging_config import get_logger
 
 from FunASRNano.schemas import (
     AppSettings,

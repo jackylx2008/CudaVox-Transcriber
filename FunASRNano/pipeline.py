@@ -8,8 +8,6 @@ from collections import defaultdict
 from dataclasses import replace
 from pathlib import Path
 
-from logging_config import get_logger, setup_logger
-
 from FunASRNano.audio import (
     build_profile_wav,
     convert_to_wav,
@@ -17,6 +15,8 @@ from FunASRNano.audio import (
     extract_wav_segment,
 )
 from FunASRNano.funasr_service import FunASRTranscriber
+from FunASRNano.logging_config import get_logger
+from FunASRNano.logging_utils import setup_project_logger
 from FunASRNano.pyannote_service import PyannoteDiarizer
 from FunASRNano.runtime import resolve_device
 from FunASRNano.schemas import Settings, TranscriptDocument, TranscriptSegment
@@ -28,7 +28,7 @@ class CudaVoxPipeline:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         level = getattr(logging, settings.app.log_level.upper(), logging.INFO)
-        setup_logger(log_level=level, reset_log=True)
+        setup_project_logger(log_level=level, reset_log=True)
         self.logger = get_logger(__name__)
         self.device = resolve_device(
             settings.device.preferred,
