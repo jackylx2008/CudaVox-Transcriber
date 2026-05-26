@@ -13,10 +13,10 @@ from FunASRNano.schemas import (
     AppSettings,
     CamppSettings,
     DeviceSettings,
-    FunASRSettings,
     OutputSettings,
     PipelineSettings,
     PyannoteSettings,
+    QwenSettings,
     Settings,
 )
 
@@ -161,7 +161,7 @@ def load_settings(
     settings = Settings(
         app=AppSettings(**_drop_empty(data.get("app", {}))),
         device=DeviceSettings(**_drop_empty(data.get("device", {}))),
-        funasr=FunASRSettings(**_drop_empty(data.get("funasr", {}))),
+        qwen=QwenSettings(**_drop_empty(data.get("qwen", {}))),
         pyannote=PyannoteSettings(**_drop_empty(data.get("pyannote", {}))),
         campp=CamppSettings(**_drop_empty(data.get("campp", {}))),
         pipeline=PipelineSettings(**_drop_empty(data.get("pipeline", {}))),
@@ -185,11 +185,13 @@ def load_settings(
             len(settings.campp.speaker_name_map),
         )
     LOGGER.info(
-        "配置加载完成: input=%s, input_files=%s, output=%s, preferred_device=%s, log_level=%s",
+        "配置加载完成: input=%s, input_files=%s, output=%s, preferred_device=%s, log_level=%s, asr_model=%s, llm_model=%s",
         settings.app.input_path,
         len(settings.app.input_files),
         settings.app.output_dir,
         settings.device.preferred,
         settings.app.log_level,
+        settings.qwen.asr_model,
+        settings.qwen.llm_model,
     )
     return settings

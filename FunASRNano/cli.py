@@ -15,7 +15,7 @@ from FunASRNano.pipeline import CudaVoxPipeline
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="使用 FunASR + pyannote + CAM++ 进行中文语音转写和说话人区分。"
+        description="使用 Qwen ASR + pyannote + CAM++ 进行中文语音转写和说话人区分。"
     )
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
     parser.add_argument("--env-file", default="common.env", help="环境变量文件路径")

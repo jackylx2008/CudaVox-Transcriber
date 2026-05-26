@@ -14,10 +14,10 @@ from FunASRNano.audio import (
     ensure_dir,
     extract_wav_segment,
 )
-from FunASRNano.funasr_service import FunASRTranscriber
 from FunASRNano.logging_config import get_logger
 from FunASRNano.logging_utils import setup_project_logger
 from FunASRNano.pyannote_service import PyannoteDiarizer
+from FunASRNano.qwen_service import QwenTranscriber
 from FunASRNano.runtime import resolve_device
 from FunASRNano.schemas import Settings, TranscriptDocument, TranscriptSegment
 from FunASRNano.transcript_io import write_transcript_outputs
@@ -42,7 +42,7 @@ class CudaVoxPipeline:
         )
 
         self.diarizer = PyannoteDiarizer(settings.pyannote, self.device, self.logger)
-        self.transcriber = FunASRTranscriber(settings.funasr, self.device, self.logger)
+        self.transcriber = QwenTranscriber(settings.qwen, self.logger)
         self.voiceprints = VoiceprintStore(settings.campp, self.device, self.logger)
 
     def process_file(self, input_path: str | Path) -> dict[str, str]:
@@ -94,16 +94,23 @@ class CudaVoxPipeline:
             len(raw_segments),
             len(merged_segments),
         )
+        metadata = {
+            "workflow": "diarization_transcription",
+            "merge_gap_seconds": self.settings.pipeline.merge_gap_seconds,
+            "dictation_model": self.settings.qwen.asr_model,
+            "text_model": self.settings.qwen.llm_model,
+        }
+        summary = self.transcriber.summarize(merged_segments)
+        if summary:
+            metadata["summary"] = summary
+
         transcript = TranscriptDocument(
             input_file=str(input_file.resolve()),
             normalized_wav=str(normalized_wav.resolve()),
             device=self.device,
             segments=merged_segments,
             raw_segments=raw_segments,
-            metadata={
-                "workflow": "diarization_transcription",
-                "merge_gap_seconds": self.settings.pipeline.merge_gap_seconds,
-            },
+            metadata=metadata,
         )
         written_files = write_transcript_outputs(
             document=transcript,

@@ -2,6 +2,7 @@
 output/
 input/
 log/
+LOCAL_AI_RUNTIME_SETUP.md
 
 # Local Python environment (project-specific)
 .conda/

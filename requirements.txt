@@ -1,7 +1,7 @@
 # 先安装与你 CUDA 版本匹配的 PyTorch / torchaudio
 # 参考: https://pytorch.org/get-started/locally/
-funasr>=1.3.0
 modelscope>=1.35.0
+requests>=2.31.0
 transformers
 tokenizers
 zhconv

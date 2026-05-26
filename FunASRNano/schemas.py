@@ -27,17 +27,31 @@ class DeviceSettings:
 
 
 @dataclass
-class FunASRSettings:
-    model: str = "FunAudioLLM/Fun-ASR-Nano-2512"
-    vad_model: str = ""
-    punc_model: str = ""
-    hub: str = "ms"
-    batch_size_s: int = 120
-    hotword: str = ""
-    max_single_segment_time: int = 30000
-    language: str = ""
-    itn: Optional[bool] = None
-    trust_remote_code: Optional[bool] = None
+class QwenSettings:
+    asr_base_url: str = "http://127.0.0.1:8081/v1"
+    asr_model: str = "Qwen3-ASR-1.7B"
+    asr_endpoint: str = "chat_completions"
+    llm_base_url: str = "http://127.0.0.1:8080/v1"
+    llm_model: str = "Qwen3.6-27B-Q4_K_M"
+    api_key: str = ""
+    audio_format: str = "wav"
+    request_timeout_seconds: int = 300
+    temperature: float = 0.0
+    asr_max_tokens: int = 1024
+    refinement_max_tokens: int = 1024
+    summary_max_tokens: int = 1024
+    summary_input_max_chars: int = 12000
+    enable_text_refinement: bool = True
+    enable_summary: bool = True
+    dictation_prompt: str = "请逐字听写这段中文语音，只输出听写文本。"
+    refinement_prompt: str = (
+        "你是中文听写文本整理助手。请在不增加新信息的前提下，纠正明显错字，补充标点，"
+        "整理口语停顿。只输出整理后的文本。"
+    )
+    summary_prompt: str = (
+        "你是会议和访谈内容整理助手。请基于以下转写文本输出简洁总结，包含主题、要点、"
+        "结论和待办。不要编造文本中没有的信息。"
+    )
 
 
 @dataclass
@@ -84,7 +98,7 @@ class OutputSettings:
 class Settings:
     app: AppSettings = field(default_factory=AppSettings)
     device: DeviceSettings = field(default_factory=DeviceSettings)
-    funasr: FunASRSettings = field(default_factory=FunASRSettings)
+    qwen: QwenSettings = field(default_factory=QwenSettings)
     pyannote: PyannoteSettings = field(default_factory=PyannoteSettings)
     campp: CamppSettings = field(default_factory=CamppSettings)
     pipeline: PipelineSettings = field(default_factory=PipelineSettings)

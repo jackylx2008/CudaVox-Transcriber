@@ -16,17 +16,25 @@ device:
   preferred: ${DEVICE:-cuda:0}
   allow_cpu_fallback: ${ALLOW_CPU_FALLBACK:-true}
 
-funasr:
-  model: ${FUNASR_MODEL:-FunAudioLLM/Fun-ASR-Nano-2512}
-  vad_model: ${FUNASR_VAD_MODEL:-}
-  punc_model: ${FUNASR_PUNC_MODEL:-}
-  hub: ${FUNASR_HUB:-ms}
-  batch_size_s: ${FUNASR_BATCH_SIZE_S:-120}
-  hotword: ${FUNASR_HOTWORD:-}
-  max_single_segment_time: ${FUNASR_MAX_SINGLE_SEGMENT_TIME:-30000}
-  language: ${FUNASR_LANGUAGE:-}
-  itn: ${FUNASR_ITN:-true}
-  trust_remote_code: ${FUNASR_TRUST_REMOTE_CODE:-false}
+qwen:
+  asr_base_url: ${QWEN_ASR_BASE_URL:-http://127.0.0.1:8081/v1}
+  asr_model: ${QWEN_ASR_MODEL:-Qwen3-ASR-1.7B}
+  asr_endpoint: ${QWEN_ASR_ENDPOINT:-chat_completions}
+  llm_base_url: ${LLAMACPP_BASE_URL:-http://127.0.0.1:8080/v1}
+  llm_model: ${LLAMACPP_MODEL:-Qwen3.6-27B-Q4_K_M}
+  api_key: ${LOCAL_AI_API_KEY:-}
+  audio_format: ${QWEN_AUDIO_FORMAT:-wav}
+  request_timeout_seconds: ${QWEN_REQUEST_TIMEOUT_SECONDS:-300}
+  temperature: ${QWEN_TEMPERATURE:-0}
+  asr_max_tokens: ${QWEN_ASR_MAX_TOKENS:-1024}
+  refinement_max_tokens: ${QWEN_REFINEMENT_MAX_TOKENS:-1024}
+  summary_max_tokens: ${QWEN_SUMMARY_MAX_TOKENS:-1024}
+  summary_input_max_chars: ${QWEN_SUMMARY_INPUT_MAX_CHARS:-12000}
+  enable_text_refinement: ${QWEN_ENABLE_TEXT_REFINEMENT:-true}
+  enable_summary: ${QWEN_ENABLE_SUMMARY:-true}
+  dictation_prompt: ${QWEN_DICTATION_PROMPT:-请逐字听写这段中文语音，只输出听写文本。}
+  refinement_prompt: ${QWEN_REFINEMENT_PROMPT:-你是中文听写文本整理助手。请在不增加新信息的前提下，纠正明显错字，补充标点，整理口语停顿。只输出整理后的文本。}
+  summary_prompt: ${QWEN_SUMMARY_PROMPT:-你是会议和访谈内容整理助手。请基于以下转写文本输出简洁总结，包含主题、要点、结论和待办。不要编造文本中没有的信息。}
 
 pyannote:
   model: ${PYANNOTE_MODEL:-pyannote/speaker-diarization-community-1}

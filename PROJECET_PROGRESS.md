@@ -4,14 +4,15 @@ Last updated: 2026-05-26
 
 ## Current State
 
-The project is a Chinese speech transcription and speaker diarization pipeline based on `FunASR`, `pyannote.audio`, and `CAM++`.
+The project is a Chinese speech transcription and speaker diarization pipeline based on `Qwen3-ASR`, `Qwen3.6`, `pyannote.audio`, and `CAM++`.
 
 The main workflow is already functional:
 
 - Normalize input audio to `16kHz / mono / wav`.
 - Run speaker diarization with `pyannote/speaker-diarization-community-1`.
 - Split per-segment temporary audio.
-- Transcribe Chinese speech with `Fun-ASR-Nano-2512`.
+- Dictate Chinese speech with `Qwen3-ASR-1.7B`.
+- Refine and summarize transcript text with `Qwen3.6-27B`.
 - Extract speaker embeddings with `CAM++`.
 - Persist and reuse speaker IDs across audio files.
 - Export `json`, `txt`, and `srt` results.
@@ -28,6 +29,9 @@ The main workflow is already functional:
 - Updated imports to use `FunASRNano.logging_config` and `FunASRNano.logging_utils`.
 - Removed the root-level `logging_config.py` reference from `pyrightconfig.json`.
 - Updated `README.md` with the current logging structure.
+- Replaced the FunASR transcription backend with a Qwen local-model backend.
+- Added `FunASRNano/qwen_service.py` for OpenAI-compatible local API calls.
+- Added JSON metadata for `dictation_model`, `text_model`, and optional `summary`.
 
 ## Validation
 

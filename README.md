@@ -1,6 +1,6 @@
 # CudaVox-Transcriber
 
-基于 `FunASR + pyannote.audio + CAM++` 的中文语音转写与说话人区分项目。
+基于 `Qwen3-ASR + Qwen3.6 + pyannote.audio + CAM++` 的中文语音转写与说话人区分项目。
 
 当前版本在保留原有主流程的基础上，已经完成一轮面向后续扩展的重构：核心结果不再只是“说话人分离片段”，而是统一收敛到可复用的转写领域模型，便于后续继续增加：
 
@@ -22,11 +22,12 @@
 1. 把输入音频统一转成 `16kHz / mono / wav`
 2. 用 `pyannote/speaker-diarization-community-1` 做说话人分离
 3. 按片段切分临时音频
-4. 用 `FunASR` 的 `Fun-ASR-Nano-2512` 做中文转写
-5. 把同一文件里的本地说话人片段拼成 profile 音频
-6. 用 `CAM++` 提取声纹 embedding
-7. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
-8. 将结果写出为统一的转写文档，再导出 `json / txt / srt`
+4. 用 `Qwen3-ASR-1.7B` 做原始听写
+5. 用 `Qwen3.6-27B` 做文本整理，并在整文件完成后生成摘要
+6. 把同一文件里的本地说话人片段拼成 profile 音频
+7. 用 `CAM++` 提取声纹 embedding
+8. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
+9. 将结果写出为统一的转写文档，再导出 `json / txt / srt`
 
 ## 重构后的结构
 
@@ -38,7 +39,7 @@
 - 编排层：
   [pipeline.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/pipeline.py)
 - 模型适配层：
-  [funasr_service.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/funasr_service.py)、
+  [qwen_service.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/qwen_service.py)、
   [pyannote_service.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/pyannote_service.py)、
   [voiceprint_service.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/voiceprint_service.py)
 - 通用音频工具：
@@ -104,6 +105,8 @@ pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```powershell
 pip install -r requirements.txt
 ```
+
+语音听写和文本整理通过本地 OpenAI 兼容 HTTP API 调用，具体本地 `llama-server` 配置按本机 `LOCAL_AI_RUNTIME_SETUP.md` 的约定设置。
 
 ## 重要前置条件
 
@@ -216,7 +219,7 @@ JSON 仍兼容原有字段，同时补充了更通用的字段，便于后续新
 - `local_speaker`: 兼容旧逻辑保留的别名字段
 - `segment_audio_path`: 片段音频路径
 - `source`: 片段来源，例如 `diarization`
-- `metadata`: 文档级元数据
+- `metadata`: 文档级元数据，包含 `dictation_model`、`text_model`，以及启用时的 `summary`
 
 ## 声纹姓名映射
 
@@ -245,10 +248,13 @@ speaker_0002=李四
 几个常用项：
 
 - `device.preferred`: 默认 `cuda:0`
-- `funasr.model`: 默认 `FunAudioLLM/Fun-ASR-Nano-2512`
-- `funasr.language`: 默认 `中文`
-- `funasr.itn`: 默认 `true`
-- `funasr.trust_remote_code`: 默认 `false`
+- `qwen.asr_base_url`: Qwen3-ASR OpenAI 兼容 API 地址，默认 `http://127.0.0.1:8081/v1`
+- `qwen.asr_model`: 听写模型，默认 `Qwen3-ASR-1.7B`
+- `qwen.asr_endpoint`: ASR 调用方式，默认 `chat_completions`，也可设为 `audio_transcriptions`
+- `qwen.llm_base_url`: 文本整理模型 API 地址，默认读取 `LLAMACPP_BASE_URL`
+- `qwen.llm_model`: 文本整理和总结模型，默认读取 `LLAMACPP_MODEL`
+- `qwen.enable_text_refinement`: 是否用 Qwen3.6 整理每段听写文本
+- `qwen.enable_summary`: 是否在 JSON `metadata.summary` 中写入整文件摘要
 - `campp.similarity_threshold`: 声纹命中阈值，默认 `0.72`
 - `campp.relaxed_similarity_threshold`: 对已有稳定声纹启用保守复用的次级阈值，默认 `0.69`
 - `campp.named_similarity_threshold`: 对已命名说话人的跨音频复用阈值，默认 `0.64`
@@ -268,6 +274,6 @@ speaker_0002=李四
 
 ## 参考资料
 
-- FunASR 官方 README: https://github.com/modelscope/FunASR
+- Qwen3-ASR 模型配置参考本机 `LOCAL_AI_RUNTIME_SETUP.md`
 - pyannote.audio 官方 README: https://github.com/pyannote/pyannote-audio
 - 3D-Speaker / CAM++ 官方仓库: https://github.com/modelscope/3D-Speaker
