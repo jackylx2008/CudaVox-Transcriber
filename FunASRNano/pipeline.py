@@ -10,14 +10,15 @@ from pathlib import Path
 
 from logging_config import get_logger, setup_logger
 
+from FunASRNano.asr import create_asr_backend
 from FunASRNano.audio import (
     build_profile_wav,
     convert_to_wav,
     ensure_dir,
     extract_wav_segment,
 )
-from FunASRNano.funasr_service import FunASRTranscriber
 from FunASRNano.pyannote_service import PyannoteDiarizer
+from FunASRNano.qwen_text_service import QwenTextProcessor
 from FunASRNano.runtime import resolve_device
 from FunASRNano.schemas import Settings, TranscriptDocument, TranscriptSegment
 from FunASRNano.transcript_io import write_transcript_outputs
@@ -42,7 +43,8 @@ class CudaVoxPipeline:
         )
 
         self.diarizer = PyannoteDiarizer(settings.pyannote, self.device, self.logger)
-        self.transcriber = FunASRTranscriber(settings.funasr, self.device, self.logger)
+        self.asr_backend = create_asr_backend(settings, self.device, self.logger)
+        self.text_processor = QwenTextProcessor(settings.qwen_text, self.logger)
         self.voiceprints = VoiceprintStore(settings.campp, self.device, self.logger)
 
     def process_file(self, input_path: str | Path) -> dict[str, str]:
@@ -82,28 +84,55 @@ class CudaVoxPipeline:
                 identity = self.voiceprints.create_transient_identity(speaker_label)
 
             if segment.segment_audio_path:
-                segment.text = self.transcriber.transcribe(segment.segment_audio_path)
+                segment.raw_text = self.asr_backend.transcribe(segment.segment_audio_path)
+                segment.text = segment.raw_text
             segment.speaker_id = identity.speaker_id
             segment.speaker_name = identity.speaker_name
             segment.speaker_similarity = identity.similarity
 
         raw_segments = [replace(segment) for segment in segments]
         merged_segments = self._merge_segments(segments)
+        self.text_processor.cleanup_segments(merged_segments)
+        summary = self.text_processor.summarize(merged_segments)
+        structured = self.text_processor.structured_output(merged_segments)
         self.logger.info(
             "文本合并完成: 原始片段=%s, 合并后片段=%s",
             len(raw_segments),
             len(merged_segments),
         )
+        metadata = {
+            "workflow": "diarization_transcription",
+            "merge_gap_seconds": self.settings.pipeline.merge_gap_seconds,
+            "asr_backend": self.asr_backend.name,
+            "asr_model": self.asr_backend.model_name,
+            "text_model": self.settings.qwen_text.model,
+            "qwen_text_enabled": self.settings.qwen_text.enabled,
+            "qwen_segment_cleanup_enabled": (
+                self.settings.qwen_text.enabled
+                and self.settings.qwen_text.enable_segment_cleanup
+            ),
+            "qwen_summary_enabled": (
+                self.settings.qwen_text.enabled
+                and self.settings.qwen_text.enable_summary
+            ),
+            "qwen_structured_output_enabled": (
+                self.settings.qwen_text.enabled
+                and self.settings.qwen_text.enable_structured_output
+            ),
+            "raw_segment_count": len(raw_segments),
+            "output_segment_count": len(merged_segments),
+        }
+        if summary:
+            metadata["summary"] = summary
+        if structured:
+            metadata["structured"] = structured
         transcript = TranscriptDocument(
             input_file=str(input_file.resolve()),
             normalized_wav=str(normalized_wav.resolve()),
             device=self.device,
             segments=merged_segments,
             raw_segments=raw_segments,
-            metadata={
-                "workflow": "diarization_transcription",
-                "merge_gap_seconds": self.settings.pipeline.merge_gap_seconds,
-            },
+            metadata=metadata,
         )
         written_files = write_transcript_outputs(
             document=transcript,
@@ -193,6 +222,7 @@ class CudaVoxPipeline:
             ):
                 previous.end = segment.end
                 previous.text = self._join_text(previous.text, segment.text)
+                previous.raw_text = self._join_text(previous.raw_text, segment.raw_text)
                 if previous.speaker_similarity is None:
                     previous.speaker_similarity = segment.speaker_similarity
                 continue

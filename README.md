@@ -14,6 +14,8 @@
 - 使用 `pyannote.audio` 做说话人分离
 - 使用 `CAM++` 生成与持久化声纹
 - 跨音频尽量复用同一个说话人 ID
+- 默认使用专用 ASR 后端 `FunASR`，可通过配置切换到 `SenseVoice`
+- 可选使用 `Qwen3.6` 做整文件摘要和结构化输出
 - 输出 `json / txt / srt`
 - 从历史转写结果中导出人工核对声纹样本
 
@@ -22,7 +24,7 @@
 1. 把输入音频统一转成 `16kHz / mono / wav`
 2. 用 `pyannote/speaker-diarization-community-1` 做说话人分离
 3. 按片段切分临时音频
-4. 用 `FunASR` 的 `Fun-ASR-Nano-2512` 做中文转写
+4. 用配置的 ASR backend 做中文转写，默认 `FunASR`，可选 `SenseVoice`
 5. 把同一文件里的本地说话人片段拼成 profile 音频
 6. 用 `CAM++` 提取声纹 embedding
 7. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
@@ -163,6 +165,23 @@ python main.py --config .\config.yaml
 python -m FunASRNano --input ".\input\2026-03-25 21_50_00.mp3"
 ```
 
+独立转写工作流：
+
+```powershell
+python .\scripts\transcribe_audio.py --input ".\input\2026-03-25 21_50_00.mp3"
+```
+
+切换 ASR backend：
+
+```powershell
+$env:DEVICE="cuda:0"
+$env:ASR_BACKEND="funasr"
+python main.py --input ".\input\2026-03-25 21_50_00.mp3"
+
+$env:ASR_BACKEND="sensevoice"
+python main.py --input ".\input\2026-03-25 21_50_00.mp3"
+```
+
 ## 声纹样本导出
 
 导出人工核对声纹的人声样本：
@@ -201,8 +220,9 @@ JSON 仍兼容原有字段，同时补充了更通用的字段，便于后续新
 - `speaker_label`: 当前文件内的本地说话人标签
 - `local_speaker`: 兼容旧逻辑保留的别名字段
 - `segment_audio_path`: 片段音频路径
+- `raw_text`: ASR 原始识别文本
 - `source`: 片段来源，例如 `diarization`
-- `metadata`: 文档级元数据
+- `metadata`: 文档级元数据，包含 `asr_backend`、`asr_model`、`text_model`，以及启用时的 `summary` 和 `structured`
 
 ## 声纹姓名映射
 
@@ -231,10 +251,17 @@ speaker_0002=李四
 几个常用项：
 
 - `device.preferred`: 默认 `cuda:0`
+- `asr.backend`: ASR 后端，默认 `funasr`，可选 `sensevoice`
 - `funasr.model`: 默认 `FunAudioLLM/Fun-ASR-Nano-2512`
 - `funasr.language`: 默认 `中文`
 - `funasr.itn`: 默认 `true`
 - `funasr.trust_remote_code`: 默认 `false`
+- `sensevoice.model`: 默认 `iic/SenseVoiceSmall`
+- `sensevoice.language`: 默认 `zh`
+- `qwen_text.enabled`: 是否启用 Qwen3.6 文本后处理
+- `qwen_text.enable_segment_cleanup`: 是否逐段校对文本，默认 `false`
+- `qwen_text.enable_summary`: 是否生成整文件摘要
+- `qwen_text.enable_structured_output`: 是否生成结构化 metadata
 - `campp.similarity_threshold`: 声纹命中阈值，默认 `0.72`
 - `campp.relaxed_similarity_threshold`: 对已有稳定声纹启用保守复用的次级阈值，默认 `0.69`
 - `campp.named_similarity_threshold`: 对已命名说话人的跨音频复用阈值，默认 `0.64`

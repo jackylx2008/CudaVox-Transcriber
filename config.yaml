@@ -16,6 +16,9 @@ device:
   preferred: ${DEVICE:-cuda:0}
   allow_cpu_fallback: ${ALLOW_CPU_FALLBACK:-true}
 
+asr:
+  backend: ${ASR_BACKEND:-funasr}
+
 funasr:
   model: ${FUNASR_MODEL:-FunAudioLLM/Fun-ASR-Nano-2512}
   vad_model: ${FUNASR_VAD_MODEL:-}
@@ -27,6 +30,30 @@ funasr:
   language: ${FUNASR_LANGUAGE:-}
   itn: ${FUNASR_ITN:-true}
   trust_remote_code: ${FUNASR_TRUST_REMOTE_CODE:-false}
+
+sensevoice:
+  model: ${SENSEVOICE_MODEL:-iic/SenseVoiceSmall}
+  hub: ${SENSEVOICE_HUB:-ms}
+  batch_size_s: ${SENSEVOICE_BATCH_SIZE_S:-120}
+  hotword: ${SENSEVOICE_HOTWORD:-}
+  language: ${SENSEVOICE_LANGUAGE:-zh}
+  itn: ${SENSEVOICE_ITN:-true}
+  trust_remote_code: ${SENSEVOICE_TRUST_REMOTE_CODE:-true}
+
+qwen_text:
+  enabled: ${QWEN_TEXT_ENABLED:-true}
+  base_url: ${QWEN_LLM_BASE_URL:-http://127.0.0.1:8080/v1}
+  model: ${QWEN_LLM_MODEL:-Qwen3.6-27B-Q4_K_M}
+  api_key: ${QWEN_API_KEY:-}
+  request_timeout_seconds: ${QWEN_TEXT_REQUEST_TIMEOUT_SECONDS:-60}
+  temperature: ${QWEN_TEMPERATURE:-0}
+  enable_segment_cleanup: ${QWEN_ENABLE_SEGMENT_CLEANUP:-false}
+  enable_summary: ${QWEN_ENABLE_SUMMARY:-true}
+  enable_structured_output: ${QWEN_ENABLE_STRUCTURED_OUTPUT:-true}
+  segment_cleanup_max_tokens: ${QWEN_SEGMENT_CLEANUP_MAX_TOKENS:-256}
+  summary_max_tokens: ${QWEN_SUMMARY_MAX_TOKENS:-1024}
+  structured_max_tokens: ${QWEN_STRUCTURED_MAX_TOKENS:-1024}
+  summary_input_max_chars: ${QWEN_SUMMARY_INPUT_MAX_CHARS:-12000}
 
 pyannote:
   model: ${PYANNOTE_MODEL:-pyannote/speaker-diarization-community-1}

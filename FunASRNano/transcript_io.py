@@ -28,6 +28,7 @@ def segment_to_payload(
         "speaker_similarity": segment.speaker_similarity,
         "segment_audio_path": segment.segment_audio_path,
         "text": segment.text,
+        "raw_text": segment.raw_text,
         "source": segment.source,
     }
     if segment.extras:

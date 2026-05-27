@@ -41,6 +41,51 @@ class FunASRSettings:
 
 
 @dataclass
+class AsrSettings:
+    backend: str = "funasr"
+
+
+@dataclass
+class SenseVoiceSettings:
+    model: str = "iic/SenseVoiceSmall"
+    hub: str = "ms"
+    batch_size_s: int = 120
+    hotword: str = ""
+    language: str = "zh"
+    itn: Optional[bool] = True
+    trust_remote_code: Optional[bool] = True
+
+
+@dataclass
+class QwenTextSettings:
+    enabled: bool = True
+    base_url: str = "http://127.0.0.1:8080/v1"
+    model: str = "Qwen3.6-27B-Q4_K_M"
+    api_key: str = ""
+    request_timeout_seconds: int = 60
+    temperature: float = 0.0
+    enable_segment_cleanup: bool = False
+    enable_summary: bool = True
+    enable_structured_output: bool = True
+    segment_cleanup_max_tokens: int = 256
+    summary_max_tokens: int = 1024
+    structured_max_tokens: int = 1024
+    summary_input_max_chars: int = 12000
+    cleanup_prompt: str = (
+        "你是中文会议转写校对助手。只修正明显的 ASR 错字、同音词、标点和格式，"
+        "不要新增事实，不要改变原意，不要编造说话人。只输出修正后的文本。"
+    )
+    summary_prompt: str = (
+        "请基于下面的会议转写内容生成简洁中文摘要，包含主题、关键结论、待办事项和未解决问题。"
+        "不要添加转写中不存在的信息。"
+    )
+    structured_prompt: str = (
+        "请基于下面的会议转写内容输出 JSON，对象包含 topics、decisions、action_items、"
+        "open_questions、risks。不要添加转写中不存在的信息。"
+    )
+
+
+@dataclass
 class PyannoteSettings:
     model: str = "pyannote/speaker-diarization-community-1"
     token: str = ""
@@ -84,7 +129,10 @@ class OutputSettings:
 class Settings:
     app: AppSettings = field(default_factory=AppSettings)
     device: DeviceSettings = field(default_factory=DeviceSettings)
+    asr: AsrSettings = field(default_factory=AsrSettings)
     funasr: FunASRSettings = field(default_factory=FunASRSettings)
+    sensevoice: SenseVoiceSettings = field(default_factory=SenseVoiceSettings)
+    qwen_text: QwenTextSettings = field(default_factory=QwenTextSettings)
     pyannote: PyannoteSettings = field(default_factory=PyannoteSettings)
     campp: CamppSettings = field(default_factory=CamppSettings)
     pipeline: PipelineSettings = field(default_factory=PipelineSettings)
@@ -106,6 +154,7 @@ class TranscriptSegment:
     start: float
     end: float
     text: str = ""
+    raw_text: str = ""
     speaker_label: str = ""
     speaker_id: str = ""
     speaker_name: str = ""

@@ -11,12 +11,15 @@ from logging_config import get_logger
 
 from FunASRNano.schemas import (
     AppSettings,
+    AsrSettings,
     CamppSettings,
     DeviceSettings,
     FunASRSettings,
     OutputSettings,
     PipelineSettings,
     PyannoteSettings,
+    QwenTextSettings,
+    SenseVoiceSettings,
     Settings,
 )
 
@@ -161,7 +164,10 @@ def load_settings(
     settings = Settings(
         app=AppSettings(**_drop_empty(data.get("app", {}))),
         device=DeviceSettings(**_drop_empty(data.get("device", {}))),
+        asr=AsrSettings(**_drop_empty(data.get("asr", {}))),
         funasr=FunASRSettings(**_drop_empty(data.get("funasr", {}))),
+        sensevoice=SenseVoiceSettings(**_drop_empty(data.get("sensevoice", {}))),
+        qwen_text=QwenTextSettings(**_drop_empty(data.get("qwen_text", {}))),
         pyannote=PyannoteSettings(**_drop_empty(data.get("pyannote", {}))),
         campp=CamppSettings(**_drop_empty(data.get("campp", {}))),
         pipeline=PipelineSettings(**_drop_empty(data.get("pipeline", {}))),
@@ -185,11 +191,12 @@ def load_settings(
             len(settings.campp.speaker_name_map),
         )
     LOGGER.info(
-        "配置加载完成: input=%s, input_files=%s, output=%s, preferred_device=%s, log_level=%s",
+        "配置加载完成: input=%s, input_files=%s, output=%s, preferred_device=%s, log_level=%s, asr_backend=%s",
         settings.app.input_path,
         len(settings.app.input_files),
         settings.app.output_dir,
         settings.device.preferred,
         settings.app.log_level,
+        settings.asr.backend,
     )
     return settings
