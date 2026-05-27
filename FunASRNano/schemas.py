@@ -37,7 +37,8 @@ class QwenSettings:
     audio_format: str = "wav"
     request_timeout_seconds: int = 300
     temperature: float = 0.0
-    asr_max_tokens: int = 1024
+    asr_max_tokens: int = 256
+    asr_concurrency: int = 3
     refinement_max_tokens: int = 256
     summary_max_tokens: int = 512
     summary_input_max_chars: int = 5000
@@ -85,7 +86,9 @@ class CamppSettings:
 
 @dataclass
 class PipelineSettings:
-    merge_gap_seconds: float = 0.4
+    merge_gap_seconds: float = 2.0
+    min_asr_segment_seconds: float = 4.0
+    max_asr_segment_seconds: float = 30.0
 
 
 @dataclass

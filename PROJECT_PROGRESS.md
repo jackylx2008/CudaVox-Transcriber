@@ -1,6 +1,6 @@
 # CudaVox-Transcriber Project Progress
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Current State
 
@@ -12,7 +12,7 @@ The main workflow is already functional:
 - Run speaker diarization with `pyannote/speaker-diarization-community-1`.
 - Merge adjacent same-speaker diarization segments before ASR.
 - Dictate Chinese speech with `Qwen3-ASR-1.7B`.
-- Summarize transcript text with `Qwen3.6-27B`; per-segment refinement is disabled by default for speed.
+- Summarize transcript text with `Qwen3.6-27B` when enabled; per-segment refinement is disabled by default for speed.
 - Extract speaker embeddings with `CAM++`.
 - Persist and reuse speaker IDs across audio files.
 - Export `json`, `txt`, and `srt` results.
@@ -43,6 +43,15 @@ The main workflow is already functional:
   - `scripts/transcribe_audio.py` for audio-to-`TranscriptDocument` outputs;
   - `scripts/cut_audio_by_srt.py` for SRT timeline based audio cutting and CSV manifests.
 - Split `CudaVoxPipeline.transcribe_file(...)` from `process_file(...)`, so callers can obtain a `TranscriptDocument` before deciding how to write or post-process it.
+- Added `TODO.md` with the Qwen3-ASR runtime bottleneck analysis and optimization plan.
+- Continued Qwen3-ASR runtime optimization:
+  - lowered default `qwen.asr_max_tokens` from 1024 to 256;
+  - added `qwen.asr_concurrency` and concurrent ASR HTTP requests;
+  - moved audio cutting into the concurrent ASR worker so cutting and ASR can overlap;
+  - merged segments by resolved voiceprint identity instead of strict pyannote local labels;
+  - raised default `pipeline.merge_gap_seconds` to 2.0 seconds;
+  - added short-segment absorption and a 30-second maximum merged ASR segment length;
+  - set local `common.env` speed test defaults to disable whole-file summary.
 
 ## Validation
 
@@ -60,6 +69,10 @@ Current local validation notes:
 - `scripts/transcribe_audio.py --help` passed.
 - `scripts/cut_audio_by_srt.py --help` passed.
 - `scripts/cut_audio_by_srt.py` smoke test wrote 1 clip and `clips.csv` using an existing SRT timeline and the currently available local mp3.
+- `input/2026-05-25 16_14_10.mp3` pre-optimization run was interrupted during ASR after producing hundreds of ASR segment files; old settings produced 784 raw diarization segments and 617 ASR target segments.
+- First optimized attempt reduced the same file to 563 ASR target segments, then was stopped to move audio cutting into concurrent ASR workers and increase merge aggressiveness.
+- Final optimized ASR-only run for `input/2026-05-25 16_14_10.mp3` completed successfully in 1119.8 seconds, about 18.66 minutes.
+- That final run produced 784 raw diarization segments, 545 Qwen3-ASR target segments, 0 empty text segments, and no summary because `QWEN_ENABLE_SUMMARY=false`.
 - `flake8` is not installed in the current `cudavox` conda environment, so the lint command could not run there.
 - `input/2026-04-13 09_46_37.mp3` completed successfully with Qwen3-ASR + Qwen3.6.
 - The output JSON contains 66 merged ASR segments, 80 raw diarization segments, 0 empty final text segments, and a generated whole-file summary.
@@ -71,6 +84,8 @@ Current local validation notes:
 - New code should avoid importing `logging_config` from the repository root.
 - The main executable entrypoints remain `main.py` and `python -m FunASRNano`.
 - For Qwen speed-sensitive runs, keep `QWEN_ENABLE_TEXT_REFINEMENT=false` and reserve Qwen3.6 for whole-file summary.
+- For ASR-only speed tests, also set `QWEN_ENABLE_SUMMARY=false` so Qwen3.6 does not need to be started.
+- Start the Qwen3-ASR `llama-server` with `--cache-ram 0` for segmented ASR workloads.
 - If throughput becomes more important than Qwen-only behavior, keep a fast ASR backend such as FunASR or SenseVoice as an optional path.
 
 ## Performance Baseline
@@ -78,8 +93,10 @@ Current local validation notes:
 - Before optimization, `input/2026-04-13 09_46_37.mp3` took about 24 minutes with Qwen3-ASR plus per-segment Qwen3.6 refinement.
 - After optimization, the same input completed in 608.20 seconds, about 10.14 minutes.
 - The optimized run used 66 Qwen3-ASR requests after merging 80 raw diarization segments, with `QWEN_ENABLE_TEXT_REFINEMENT=false`.
+- For the longer `input/2026-05-25 16_14_10.mp3` ASR-only test, the optimized path completed in 1119.8 seconds, about 18.66 minutes, using 545 Qwen3-ASR requests after merging 784 raw diarization segments.
 
 ## Next Candidates
 
+- Add a standalone summary script so Qwen3.6 can summarize completed transcript files after the ASR-only run.
 - Add a true transcription-only workflow mode that skips diarization and voiceprint matching when speaker attribution is not needed.
 - Add focused tests around configuration loading, transcript serialization, and logging setup compatibility.

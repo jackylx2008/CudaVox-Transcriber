@@ -25,7 +25,7 @@
 4. 合并相邻同说话人的短片段，减少 ASR 请求次数
 5. 按合并后的片段切分临时音频
 6. 用 `Qwen3-ASR-1.7B` 做原始听写
-7. 默认跳过逐段 `Qwen3.6-27B` 文本整理，仅在整文件完成后生成摘要
+7. 默认跳过逐段 `Qwen3.6-27B` 文本整理；速度测试时也可关闭整文件摘要
 8. 把同一文件里的本地说话人片段拼成 profile 音频
 9. 用 `CAM++` 提取声纹 embedding
 10. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
@@ -237,7 +237,15 @@ JSON 仍兼容原有字段，同时补充了更通用的字段，便于后续新
 - `source`: 片段来源，例如 `diarization`
 - `metadata`: 文档级元数据，包含 `dictation_model`、`text_model`，以及启用时的 `summary`
 
-当前为了减少 Qwen HTTP 请求，程序先把相邻同说话人的 diarization 片段合并为 ASR 目标片段，再切音频并调用 Qwen3-ASR。`raw_segments` 仍保留原始 diarization 片段，并在 `extras.transcribed_segment_index` 中记录它归属的合并听写片段。
+当前为了减少 Qwen HTTP 请求，程序先按声纹归一化后的说话人身份合并 diarization 片段，再切音频并调用 Qwen3-ASR。`raw_segments` 仍保留原始 diarization 片段，并在 `extras.transcribed_segment_index` 中记录它归属的合并听写片段。
+
+Qwen3-ASR 速度敏感配置：
+
+- `qwen.asr_max_tokens` 默认降为 `256`，避免个别短片段生成到 1024 token 上限。
+- `qwen.asr_concurrency` 默认 `3`，并发请求本地 `llama-server`，让多个 slot 同时处理 ASR。
+- `pipeline.merge_gap_seconds` 默认 `2.0`，并按声纹身份而不是 pyannote 本地标签做合并。
+- `pipeline.min_asr_segment_seconds` 默认 `4.0`，尽量吸收同一说话人的短片段。
+- `pipeline.max_asr_segment_seconds` 默认 `30.0`，避免合并出过长 ASR 请求。
 
 ## 当前性能记录
 
@@ -245,6 +253,15 @@ JSON 仍兼容原有字段，同时补充了更通用的字段，便于后续新
 
 - 优化前：约 24 分钟，主要耗时来自逐段 Qwen3.6 文本整理和 80 次片段化 ASR 调用。
 - 优化后：608.20 秒，约 10.14 分钟；80 个原始 diarization 片段先合并为 66 个 ASR 片段，且逐段文本整理关闭，只保留整文件摘要。
+
+`input/2026-05-25 16_14_10.mp3` 的中断测试暴露了更典型的长音频瓶颈：pyannote 产生 784 个原始片段，旧合并逻辑仍产生 617 个 ASR 请求；Qwen3-ASR 日志显示 audio encoder 使用 CPU backend，并且 ASR HTTP 请求串行执行。
+
+按“减少片段数 + 降 token + 关闭 cache + 并发请求”继续优化后，同一文件在本机 ASR-only 配置下完成：
+
+- 总耗时：1119.8 秒，约 18.66 分钟。
+- 输出：784 个原始 diarization 片段，545 个 Qwen3-ASR 目标片段，0 个空文本片段。
+- 配置：`QWEN_ASR_MAX_TOKENS=256`、`QWEN_ASR_CONCURRENCY=3`、`QWEN_ENABLE_TEXT_REFINEMENT=false`、`QWEN_ENABLE_SUMMARY=false`。
+- 服务：Qwen3-ASR `llama-server` 使用 `--cache-ram 0`；由于关闭总结，本轮不需要启动 Qwen3.6-27B。
 
 ## 声纹姓名映射
 
@@ -276,6 +293,8 @@ speaker_0002=李四
 - `qwen.asr_base_url`: Qwen3-ASR OpenAI 兼容 API 地址，默认 `http://127.0.0.1:8081/v1`
 - `qwen.asr_model`: 听写模型，默认 `Qwen3-ASR-1.7B`
 - `qwen.asr_endpoint`: ASR 调用方式，默认 `chat_completions`，也可设为 `audio_transcriptions`
+- `qwen.asr_max_tokens`: ASR 输出 token 上限，默认 `256`
+- `qwen.asr_concurrency`: ASR 并发请求数，默认 `3`
 - `qwen.llm_base_url`: 文本整理模型 API 地址，默认读取 `LLAMACPP_BASE_URL`
 - `qwen.llm_model`: 文本整理和总结模型，默认读取 `LLAMACPP_MODEL`
 - `qwen.enable_text_refinement`: 是否用 Qwen3.6 整理每段听写文本，默认 `false`
@@ -283,12 +302,28 @@ speaker_0002=李四
 - `qwen.summary_max_tokens`: 整文件总结 token 上限，默认 `512`
 - `qwen.summary_input_max_chars`: 送入整文件总结的最大字符数，默认 `5000`
 - `qwen.refinement_min_duration_seconds`: 短于该时长的片段跳过逐段整理，默认 `2.0`
-- `qwen.enable_summary`: 是否在 JSON `metadata.summary` 中写入整文件摘要
+- `qwen.enable_summary`: 是否在 JSON `metadata.summary` 中写入整文件摘要；速度测试可设为 `false`
 - `campp.similarity_threshold`: 声纹命中阈值，默认 `0.72`
 - `campp.relaxed_similarity_threshold`: 对已有稳定声纹启用保守复用的次级阈值，默认 `0.69`
 - `campp.named_similarity_threshold`: 对已命名说话人的跨音频复用阈值，默认 `0.64`
 - `pyannote.num_speakers`: 已知说话人数时可直接指定
-- `pipeline.merge_gap_seconds`: 合并相邻同说话人片段的时间间隔
+- `pipeline.merge_gap_seconds`: 合并相邻同说话人片段的时间间隔，默认 `2.0`
+- `pipeline.min_asr_segment_seconds`: 同一说话人的短片段吸收阈值，默认 `4.0`
+- `pipeline.max_asr_segment_seconds`: 合并后 ASR 片段最长时长，默认 `30.0`
+
+启动 Qwen3-ASR 的 `llama-server` 时建议关闭 prompt cache，避免大量不同音频片段反复保存/淘汰缓存：
+
+```powershell
+D:\llama-cpp-cu12\llama-server.exe `
+  -m "C:\Users\bcjt_\.lmstudio\models\ggml-org\Qwen3-ASR-1.7B-GGUF\Qwen3-ASR-1.7B-Q8_0.gguf" `
+  --mmproj "C:\Users\bcjt_\.lmstudio\models\ggml-org\Qwen3-ASR-1.7B-GGUF\mmproj-Qwen3-ASR-1.7B-bf16.gguf" `
+  --host 127.0.0.1 `
+  --port 8081 `
+  -c 8192 `
+  -ngl 999 `
+  --alias Qwen3-ASR-1.7B `
+  --cache-ram 0
+```
 
 ## 后续扩展建议
 

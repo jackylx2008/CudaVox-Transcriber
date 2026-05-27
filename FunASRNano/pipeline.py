@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import shutil
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from pathlib import Path
 
@@ -81,17 +82,13 @@ class CudaVoxPipeline:
         raw_segments = [self._copy_segment(segment) for segment in segments]
         merged_segments = self._merge_segments(segments)
         self.logger.info(
-            "ASR 前合并完成: 原始片段=%s, ASR 目标片段=%s",
+            "ASR 前合并完成: 原始片段=%s, ASR 目标片段=%s, 并发=%s",
             len(raw_segments),
             len(merged_segments),
+            self.settings.qwen.asr_concurrency,
         )
 
-        for index, segment in enumerate(merged_segments, start=1):
-            speaker_label = segment.speaker_label or f"speaker_{index:04d}"
-            segment_path = temp_dir / f"asr_segment_{index:04d}_{speaker_label}.wav"
-            extract_wav_segment(normalized_wav, segment.start, segment.end, segment_path)
-            segment.segment_audio_path = str(segment_path)
-            segment.text = self.transcriber.transcribe_segment(segment)
+        self._transcribe_segments(merged_segments, normalized_wav, temp_dir)
 
         self._annotate_raw_segments(raw_segments, merged_segments)
         self.logger.info(
@@ -107,6 +104,10 @@ class CudaVoxPipeline:
             "raw_segment_count": len(raw_segments),
             "asr_segment_count": len(merged_segments),
             "text_refinement_enabled": self.settings.qwen.enable_text_refinement,
+            "asr_concurrency": self.settings.qwen.asr_concurrency,
+            "asr_max_tokens": self.settings.qwen.asr_max_tokens,
+            "min_asr_segment_seconds": self.settings.pipeline.min_asr_segment_seconds,
+            "max_asr_segment_seconds": self.settings.pipeline.max_asr_segment_seconds,
         }
         summary = self.transcriber.summarize(merged_segments)
         if summary:
@@ -144,6 +145,54 @@ class CudaVoxPipeline:
 
         self.logger.info("处理完成: %s", input_file)
         return written_files
+
+    def _transcribe_segments(
+        self,
+        segments: list[TranscriptSegment],
+        normalized_wav: Path,
+        temp_dir: Path,
+    ) -> None:
+        workers = max(1, int(self.settings.qwen.asr_concurrency))
+        if workers == 1 or len(segments) <= 1:
+            for index, segment in enumerate(segments, start=1):
+                self._prepare_and_transcribe_segment(index, segment, normalized_wav, temp_dir)
+            return
+
+        completed = 0
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(
+                    self._prepare_and_transcribe_segment,
+                    index,
+                    segment,
+                    normalized_wav,
+                    temp_dir,
+                ): segment
+                for index, segment in enumerate(segments, start=1)
+            }
+            for future in as_completed(futures):
+                segment = futures[future]
+                future.result()
+                completed += 1
+                if completed % 20 == 0 or completed == len(segments):
+                    self.logger.info(
+                        "ASR 并发转写进度: %s/%s",
+                        completed,
+                        len(segments),
+                    )
+
+    def _prepare_and_transcribe_segment(
+        self,
+        index: int,
+        segment: TranscriptSegment,
+        normalized_wav: Path,
+        temp_dir: Path,
+    ) -> None:
+        speaker_label = segment.speaker_label or f"speaker_{index:04d}"
+        segment_path = temp_dir / f"asr_segment_{index:04d}_{speaker_label}.wav"
+        extract_wav_segment(normalized_wav, segment.start, segment.end, segment_path)
+        segment.segment_audio_path = str(segment_path)
+        segment.text = self.transcriber.transcribe_segment(segment)
 
     @staticmethod
     def _copy_segment(segment: TranscriptSegment) -> TranscriptSegment:
@@ -236,10 +285,26 @@ class CudaVoxPipeline:
 
             previous = merged[-1]
             gap = segment.start - previous.end
-            if (
+            merged_duration = segment.end - previous.start
+            short_merge_gap = max(
+                self.settings.pipeline.merge_gap_seconds,
+                self.settings.pipeline.min_asr_segment_seconds,
+            )
+            can_merge = (
                 self._speaker_key(previous) == self._speaker_key(segment)
                 and gap <= self.settings.pipeline.merge_gap_seconds
-            ):
+                and merged_duration <= self.settings.pipeline.max_asr_segment_seconds
+            )
+            should_merge_short = (
+                self._speaker_key(previous) == self._speaker_key(segment)
+                and (
+                    previous.duration < self.settings.pipeline.min_asr_segment_seconds
+                    or segment.duration < self.settings.pipeline.min_asr_segment_seconds
+                )
+                and gap <= short_merge_gap
+                and merged_duration <= self.settings.pipeline.max_asr_segment_seconds
+            )
+            if can_merge or should_merge_short:
                 previous.end = segment.end
                 previous.text = self._join_text(previous.text, segment.text)
                 if previous.speaker_similarity is None:
@@ -261,9 +326,9 @@ class CudaVoxPipeline:
         return f"{left}{right}"
 
     @staticmethod
-    def _speaker_key(segment: TranscriptSegment) -> tuple[str, str, str]:
-        return (
-            segment.speaker_id,
-            segment.speaker_name,
-            segment.speaker_label,
-        )
+    def _speaker_key(segment: TranscriptSegment) -> tuple[str, str]:
+        if segment.speaker_id:
+            return ("speaker_id", segment.speaker_id)
+        if segment.speaker_name:
+            return ("speaker_name", segment.speaker_name)
+        return ("speaker_label", segment.speaker_label)

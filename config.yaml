@@ -26,7 +26,8 @@ qwen:
   audio_format: ${QWEN_AUDIO_FORMAT:-wav}
   request_timeout_seconds: ${QWEN_REQUEST_TIMEOUT_SECONDS:-300}
   temperature: ${QWEN_TEMPERATURE:-0}
-  asr_max_tokens: ${QWEN_ASR_MAX_TOKENS:-1024}
+  asr_max_tokens: ${QWEN_ASR_MAX_TOKENS:-256}
+  asr_concurrency: ${QWEN_ASR_CONCURRENCY:-3}
   refinement_max_tokens: ${QWEN_REFINEMENT_MAX_TOKENS:-256}
   summary_max_tokens: ${QWEN_SUMMARY_MAX_TOKENS:-512}
   summary_input_max_chars: ${QWEN_SUMMARY_INPUT_MAX_CHARS:-5000}
@@ -61,7 +62,9 @@ campp:
   max_profile_audio_seconds: ${VOICEPRINT_MAX_PROFILE_AUDIO_SECONDS:-30.0}
 
 pipeline:
-  merge_gap_seconds: ${MERGE_GAP_SECONDS:-0.4}
+  merge_gap_seconds: ${MERGE_GAP_SECONDS:-2.0}
+  min_asr_segment_seconds: ${MIN_ASR_SEGMENT_SECONDS:-4.0}
+  max_asr_segment_seconds: ${MAX_ASR_SEGMENT_SECONDS:-30.0}
 
 output:
   write_json: ${WRITE_JSON:-true}
