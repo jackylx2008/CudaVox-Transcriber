@@ -20,20 +20,24 @@ class LlamaCppServerManager:
         settings: LlamaCppSettings,
         logger,
         project_root: Path | None = None,
+        service_name: str = "llama.cpp",
+        log_prefix: str = "llama_server",
     ) -> None:
         self.settings = settings
         self.logger = logger
         self.project_root = project_root or Path.cwd()
+        self.service_name = service_name
+        self.log_prefix = log_prefix
         self.process: subprocess.Popen | None = None
 
     def ensure_server(self) -> None:
         if self._is_ready():
-            self.logger.info("Qwen3.6 llama.cpp 服务已可用: %s", self.settings.base_url)
+            self.logger.info("%s 服务已可用: %s", self.service_name, self.settings.base_url)
             return
 
         if not self.settings.autostart:
             raise RuntimeError(
-                f"Qwen3.6 服务不可用，且 LLAMACPP_AUTOSTART=false: {self.settings.base_url}"
+                f"{self.service_name} 服务不可用，且 autostart=false: {self.settings.base_url}"
             )
 
         self._start_server()
@@ -45,7 +49,7 @@ class LlamaCppServerManager:
         if self.process.poll() is not None:
             self.process = None
             return
-        self.logger.info("关闭本次自动启动的 llama.cpp 服务。")
+        self.logger.info("关闭本次自动启动的 %s 服务。", self.service_name)
         self.process.terminate()
         try:
             self.process.wait(timeout=20)
@@ -89,12 +93,12 @@ class LlamaCppServerManager:
 
         log_dir = self.project_root / "log"
         log_dir.mkdir(parents=True, exist_ok=True)
-        stdout_path = log_dir / "llama_server.out.log"
-        stderr_path = log_dir / "llama_server.err.log"
+        stdout_path = log_dir / f"{self.log_prefix}.out.log"
+        stderr_path = log_dir / f"{self.log_prefix}.err.log"
         env = os.environ.copy()
         env["PATH"] = self._build_path(server_path.parent, env.get("PATH", ""))
 
-        self.logger.info("自动启动 Qwen3.6 llama.cpp 服务: %s", self.settings.base_url)
+        self.logger.info("自动启动 %s 服务: %s", self.service_name, self.settings.base_url)
         stdout_file = stdout_path.open("ab")
         stderr_file = stderr_path.open("ab")
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -113,11 +117,11 @@ class LlamaCppServerManager:
         while time.monotonic() < deadline:
             if self.process and self.process.poll() is not None:
                 raise RuntimeError(
-                    "llama.cpp 服务启动后立即退出，查看 log/llama_server.err.log"
+                    f"{self.service_name} 服务启动后立即退出，查看 log/{self.log_prefix}.err.log"
                 )
             try:
                 if self._is_ready():
-                    self.logger.info("Qwen3.6 llama.cpp 服务启动完成。")
+                    self.logger.info("%s 服务启动完成。", self.service_name)
                     return
             except Exception as exc:  # noqa: BLE001 - keep polling startup diagnostics.
                 last_error = str(exc)
@@ -136,7 +140,7 @@ class LlamaCppServerManager:
         model_ids = self._extract_model_ids(models)
         if self.settings.model not in model_ids:
             raise RuntimeError(
-                f"Qwen3.6 服务模型不匹配: 期望 {self.settings.model}, 实际 {model_ids}"
+                f"{self.service_name} 服务模型不匹配: 期望 {self.settings.model}, 实际 {model_ids}"
             )
         return True
 

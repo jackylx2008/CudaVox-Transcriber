@@ -40,6 +40,29 @@ sensevoice:
   itn: ${SENSEVOICE_ITN:-true}
   trust_remote_code: ${SENSEVOICE_TRUST_REMOTE_CODE:-true}
 
+qwen_asr:
+  base_url: ${QWEN_ASR_BASE_URL:-http://127.0.0.1:8081/v1}
+  model: ${QWEN_ASR_MODEL:-Qwen3-ASR-1.7B}
+  endpoint: ${QWEN_ASR_ENDPOINT:-chat_completions}
+  api_key: ${QWEN_API_KEY:-}
+  audio_format: ${QWEN_AUDIO_FORMAT:-wav}
+  request_timeout_seconds: ${QWEN_ASR_REQUEST_TIMEOUT_SECONDS:-300}
+  temperature: ${QWEN_TEMPERATURE:-0}
+  max_tokens: ${QWEN_ASR_MAX_TOKENS:-256}
+  dictation_prompt: ${QWEN_ASR_DICTATION_PROMPT:-请逐字听写这段中文语音，只输出听写文本。}
+  autostart: ${QWEN_ASR_AUTOSTART:-false}
+  server_path: ${QWEN_ASR_SERVER_PATH:-}
+  model_path: ${QWEN_ASR_MODEL_PATH:-}
+  mmproj_path: ${QWEN_ASR_MMPROJ_PATH:-}
+  extra_dll_dirs: ${QWEN_ASR_EXTRA_DLL_DIRS:-}
+  n_gpu_layers: ${QWEN_ASR_N_GPU_LAYERS:-999}
+  ctx_size: ${QWEN_ASR_CTX_SIZE:-4096}
+  host: ${QWEN_ASR_HOST:-127.0.0.1}
+  port: ${QWEN_ASR_PORT:-8081}
+  reasoning: ${QWEN_ASR_REASONING:-off}
+  reasoning_budget: ${QWEN_ASR_REASONING_BUDGET:-0}
+  startup_timeout_seconds: ${QWEN_ASR_STARTUP_TIMEOUT_SECONDS:-300}
+
 qwen_text:
   enabled: ${QWEN_TEXT_ENABLED:-true}
   base_url: ${QWEN_LLM_BASE_URL:-http://127.0.0.1:8080/v1}

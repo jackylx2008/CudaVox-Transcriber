@@ -87,18 +87,23 @@ class CudaVoxPipeline:
             source_file=input_file.name,
         )
 
-        for segment in segments:
-            speaker_label = segment.speaker_label
-            identity = identities.get(speaker_label)
-            if identity is None:
-                identity = self.voiceprints.create_transient_identity(speaker_label)
+        try:
+            for segment in segments:
+                speaker_label = segment.speaker_label
+                identity = identities.get(speaker_label)
+                if identity is None:
+                    identity = self.voiceprints.create_transient_identity(speaker_label)
 
-            if segment.segment_audio_path:
-                segment.raw_text = self.asr_backend.transcribe(segment.segment_audio_path)
-                segment.text = segment.raw_text
-            segment.speaker_id = identity.speaker_id
-            segment.speaker_name = identity.speaker_name
-            segment.speaker_similarity = identity.similarity
+                if segment.segment_audio_path:
+                    segment.raw_text = self.asr_backend.transcribe(
+                        segment.segment_audio_path
+                    )
+                    segment.text = segment.raw_text
+                segment.speaker_id = identity.speaker_id
+                segment.speaker_name = identity.speaker_name
+                segment.speaker_similarity = identity.similarity
+        finally:
+            self._shutdown_asr_backend()
 
         raw_segments = [replace(segment) for segment in segments]
         merged_segments = self._merge_segments(segments)
@@ -253,6 +258,11 @@ class CudaVoxPipeline:
         if not right:
             return left
         return f"{left}{right}"
+
+    def _shutdown_asr_backend(self) -> None:
+        shutdown = getattr(self.asr_backend, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
 
     @staticmethod
     def _speaker_key(segment: TranscriptSegment) -> tuple[str, str, str]:

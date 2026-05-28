@@ -14,7 +14,7 @@
 - 使用 `pyannote.audio` 做说话人分离
 - 使用 `CAM++` 生成与持久化声纹
 - 跨音频尽量复用同一个说话人 ID
-- 默认使用专用 ASR 后端 `FunASR`，可通过配置切换到 `SenseVoice`
+- 默认使用专用 ASR 后端 `FunASR`，可通过配置切换到 `SenseVoice` 或实验性的 `Qwen3-ASR`
 - 可选使用 `Qwen3.6` 做整文件摘要和结构化输出
 - 输出 `json / txt / srt`
 - 从历史转写结果中导出人工核对声纹样本
@@ -24,7 +24,7 @@
 1. 把输入音频统一转成 `16kHz / mono / wav`
 2. 用 `pyannote/speaker-diarization-community-1` 做说话人分离
 3. 按片段切分临时音频
-4. 用配置的 ASR backend 做中文转写，默认 `FunASR`，可选 `SenseVoice`
+4. 用配置的 ASR backend 做中文转写，默认 `FunASR`，可选 `SenseVoice` 或 `Qwen3-ASR`
 5. 把同一文件里的本地说话人片段拼成 profile 音频
 6. 用 `CAM++` 提取声纹 embedding
 7. 与本地声纹库做余弦相似度比对，命中则复用已有说话人 ID，否则创建新说话人
@@ -180,7 +180,12 @@ python main.py --input ".\input\2026-03-25 21_50_00.mp3"
 
 $env:ASR_BACKEND="sensevoice"
 python main.py --input ".\input\2026-03-25 21_50_00.mp3"
+
+$env:ASR_BACKEND="qwen_asr"
+python main.py --input ".\input\2026-03-25 21_50_00.mp3"
 ```
+
+`qwen_asr` 是实验后端：流程仍使用 `pyannote` 做说话人分离、按片段切音频、逐段调用 Qwen3-ASR 听写、执行声纹匹配，最后再用 Qwen3.6 做整文件结构化输出。Qwen3-ASR 通过本地 `llama-server` 提供 OpenAI-compatible HTTP 接口，路径和端口放在 `common.env` 的 `QWEN_ASR_*` 变量中。
 
 ## 声纹样本导出
 
@@ -251,13 +256,16 @@ speaker_0002=李四
 几个常用项：
 
 - `device.preferred`: 默认 `cuda:0`
-- `asr.backend`: ASR 后端，默认 `funasr`，可选 `sensevoice`
+- `asr.backend`: ASR 后端，默认 `funasr`，可选 `sensevoice`、`qwen_asr`
 - `funasr.model`: 默认 `FunAudioLLM/Fun-ASR-Nano-2512`
 - `funasr.language`: 默认 `中文`
 - `funasr.itn`: 默认 `true`
 - `funasr.trust_remote_code`: 默认 `false`
 - `sensevoice.model`: 默认 `iic/SenseVoiceSmall`
 - `sensevoice.language`: 默认 `zh`
+- `qwen_asr.base_url`: Qwen3-ASR 本地服务地址，默认 `http://127.0.0.1:8081/v1`
+- `qwen_asr.model`: Qwen3-ASR 模型别名，默认 `Qwen3-ASR-1.7B`
+- `qwen_asr.autostart`: 是否由流程自动启动 Qwen3-ASR `llama-server`
 - `qwen_text.enabled`: 是否启用 Qwen3.6 文本后处理
 - `qwen_text.enable_segment_cleanup`: 是否逐段校对文本，默认 `false`
 - `qwen_text.enable_summary`: 是否生成整文件摘要

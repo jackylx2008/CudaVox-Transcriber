@@ -104,6 +104,49 @@ class LlamaCppSettings:
 
 
 @dataclass
+class QwenAsrSettings:
+    base_url: str = "http://127.0.0.1:8081/v1"
+    model: str = "Qwen3-ASR-1.7B"
+    endpoint: str = "chat_completions"
+    api_key: str = ""
+    audio_format: str = "wav"
+    request_timeout_seconds: int = 300
+    temperature: float = 0.0
+    max_tokens: int = 256
+    dictation_prompt: str = "请逐字听写这段中文语音，只输出听写文本。"
+    autostart: bool = False
+    server_path: str = ""
+    model_path: str = ""
+    mmproj_path: str = ""
+    extra_dll_dirs: str = ""
+    n_gpu_layers: int = 999
+    ctx_size: int = 8192
+    host: str = "127.0.0.1"
+    port: int = 8081
+    reasoning: str = "off"
+    reasoning_budget: int = 0
+    startup_timeout_seconds: int = 300
+
+    def to_llamacpp_settings(self) -> LlamaCppSettings:
+        return LlamaCppSettings(
+            base_url=self.base_url,
+            model=self.model,
+            autostart=self.autostart,
+            server_path=self.server_path,
+            model_path=self.model_path,
+            mmproj_path=self.mmproj_path,
+            extra_dll_dirs=self.extra_dll_dirs,
+            n_gpu_layers=self.n_gpu_layers,
+            ctx_size=self.ctx_size,
+            host=self.host,
+            port=self.port,
+            reasoning=self.reasoning,
+            reasoning_budget=self.reasoning_budget,
+            startup_timeout_seconds=self.startup_timeout_seconds,
+        )
+
+
+@dataclass
 class PyannoteSettings:
     model: str = "pyannote/speaker-diarization-community-1"
     token: str = ""
@@ -150,6 +193,7 @@ class Settings:
     asr: AsrSettings = field(default_factory=AsrSettings)
     funasr: FunASRSettings = field(default_factory=FunASRSettings)
     sensevoice: SenseVoiceSettings = field(default_factory=SenseVoiceSettings)
+    qwen_asr: QwenAsrSettings = field(default_factory=QwenAsrSettings)
     qwen_text: QwenTextSettings = field(default_factory=QwenTextSettings)
     llamacpp: LlamaCppSettings = field(default_factory=LlamaCppSettings)
     pyannote: PyannoteSettings = field(default_factory=PyannoteSettings)
