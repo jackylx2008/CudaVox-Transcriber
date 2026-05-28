@@ -3,6 +3,7 @@
     "FunASRNano",
     "scripts",
     "main.py",
+    "_main.py",
     "logging_config.py"
   ],
   "venvPath": "C:/Users/bcjt_/anaconda3/envs",

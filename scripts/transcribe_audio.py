@@ -1,4 +1,7 @@
-"""Standalone audio transcription workflow."""
+"""Internal audio transcription workflow entrypoint.
+
+Use the project root `main.py` for normal CLI runs.
+"""
 
 from __future__ import annotations
 
