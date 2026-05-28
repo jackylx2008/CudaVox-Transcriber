@@ -36,7 +36,7 @@
 
 - 入口层：
   [main.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/main.py)、
-  [_main.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/_main.py)、
+  [Deprecated_main.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/Deprecated_main.py)、
   [cli.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/cli.py)
 - 编排层：
   [pipeline.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/pipeline.py)
@@ -169,10 +169,15 @@ python -m FunASRNano --input ".\input\2026-03-25 21_50_00.mp3"
 兼容旧入口：
 
 ```powershell
-python .\_main.py --input ".\input\2026-03-25 21_50_00.mp3"
+python .\Deprecated_main.py --input ".\input\2026-03-25 21_50_00.mp3"
 ```
 
-`_main.py` is deprecated. New commands should use `main.py`. `scripts/transcribe_audio.py` is kept as an internal workflow entrypoint and should not be used as the documented project entry.
+`Deprecated_main.py` is deprecated. New commands should use `main.py`. `scripts/transcribe_audio.py` is kept as an internal workflow entrypoint and should not be used as the documented project entry.
+
+日志文件：
+
+- 保留原始分散日志，例如入口日志、`qwen_asr_server.err.log`、`llama_server.err.log`
+- 运行 `main.py` 时，主要 INFO 级运行记录会同时写入 `log/main.log`
 
 切换 ASR backend：
 

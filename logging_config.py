@@ -24,11 +24,16 @@ def setup_logger(
     log_level: int = logging.DEBUG,
     log_file: Optional[str] = None,
     reset_log: bool = False,
+    main_log_file: Optional[str] = "log/main.log",
 ):
     """Configure the root logger for the current process."""
     resolved_log_file = Path(log_file) if log_file else _default_log_file()
     resolved_log_file.parent.mkdir(parents=True, exist_ok=True)
     resolved_log_file_key = str(resolved_log_file.resolve())
+    resolved_main_log_file = Path(main_log_file) if main_log_file else None
+    resolved_main_log_file_key = (
+        str(resolved_main_log_file.resolve()) if resolved_main_log_file else ""
+    )
 
     log_format = (
         "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
@@ -49,20 +54,48 @@ def setup_logger(
         resolved_log_file.write_text("", encoding="utf-8")
         _RESET_DONE.add(resolved_log_file_key)
 
-    file_handler = RotatingFileHandler(
+    file_handler = _build_file_handler(
         resolved_log_file,
+        log_format=log_format,
+    )
+
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+    if (
+        resolved_main_log_file
+        and resolved_main_log_file_key != resolved_log_file_key
+    ):
+        resolved_main_log_file.parent.mkdir(parents=True, exist_ok=True)
+        if reset_log and resolved_main_log_file_key not in _RESET_DONE:
+            resolved_main_log_file.write_text("", encoding="utf-8")
+            _RESET_DONE.add(resolved_main_log_file_key)
+
+        main_file_handler = _build_file_handler(
+            resolved_main_log_file,
+            log_format=log_format,
+        )
+        main_file_handler.setLevel(logging.INFO)
+        root_logger.addHandler(main_file_handler)
+
+    root_logger.debug(
+        "日志系统已初始化，日志文件: %s, 主日志文件: %s",
+        resolved_log_file.resolve(),
+        resolved_main_log_file.resolve() if resolved_main_log_file else "disabled",
+    )
+    return root_logger
+
+
+def _build_file_handler(log_file: Path, log_format: str) -> RotatingFileHandler:
+    handler = RotatingFileHandler(
+        log_file,
         mode="a",
         maxBytes=10 * 1024 * 1024,
         backupCount=5,
         encoding="utf-8",
     )
-    file_handler.setFormatter(logging.Formatter(log_format))
-
-    root_logger.addHandler(console_handler)
-    root_logger.addHandler(file_handler)
-
-    root_logger.debug("日志系统已初始化，日志文件: %s", resolved_log_file.resolve())
-    return root_logger
+    handler.setFormatter(logging.Formatter(log_format))
+    return handler
 
 
 def get_logger(name: Optional[str] = None) -> logging.Logger:

@@ -13,7 +13,7 @@ from FunASRNano.cli import main
 
 if __name__ == "__main__":
     sys.stderr.write(
-        "Deprecated: _main.py is a compatibility entrypoint. "
+        "Deprecated: Deprecated_main.py is a compatibility entrypoint. "
         "Use main.py instead.\n"
     )
     raise SystemExit(main())
