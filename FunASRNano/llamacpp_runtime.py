@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import time
 import urllib.error
@@ -25,10 +26,18 @@ class LlamaCppServerManager:
         self.logger = logger
         self.project_root = project_root or Path.cwd()
         self.process: subprocess.Popen | None = None
+        self.existing_pid: int | None = None
 
     def ensure_server(self) -> None:
         if self._is_ready():
             self.logger.info("Qwen3.6 llama.cpp 服务已可用: %s", self.settings.base_url)
+            if self.settings.shutdown_existing_on_exit:
+                self.existing_pid = self._listening_pid()
+                if self.existing_pid:
+                    self.logger.info(
+                        "已记录现有 Qwen3.6 llama.cpp 服务 PID=%s，退出时将按配置关闭。",
+                        self.existing_pid,
+                    )
             return
 
         if not self.settings.autostart:
@@ -41,9 +50,11 @@ class LlamaCppServerManager:
 
     def shutdown_started_server(self) -> None:
         if self.process is None:
+            self._shutdown_existing_server()
             return
         if self.process.poll() is not None:
             self.process = None
+            self._shutdown_existing_server()
             return
         self.logger.info("关闭本次自动启动的 llama.cpp 服务。")
         self.process.terminate()
@@ -54,6 +65,62 @@ class LlamaCppServerManager:
             self.process.wait(timeout=20)
         finally:
             self.process = None
+
+    def _shutdown_existing_server(self) -> None:
+        if not self.settings.shutdown_existing_on_exit:
+            return
+        pid = self.existing_pid or self._listening_pid()
+        if not pid:
+            self.logger.info("未找到需要关闭的现有 llama.cpp 服务。")
+            return
+        if self.process and self.process.pid == pid:
+            return
+
+        self.logger.info(
+            "按 LLAMACPP_SHUTDOWN_EXISTING_ON_EXIT=true 关闭现有 llama.cpp 服务: PID=%s",
+            pid,
+        )
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        self.existing_pid = None
+
+    def _listening_pid(self) -> int | None:
+        try:
+            result = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except OSError:
+            return None
+        if result.returncode != 0:
+            return None
+
+        port_suffix = f":{self.settings.port}"
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            protocol, local_address, _remote_address, state, pid_text = parts[:5]
+            if protocol.upper() != "TCP" or state.upper() != "LISTENING":
+                continue
+            if not local_address.endswith(port_suffix):
+                continue
+            try:
+                return int(pid_text)
+            except ValueError:
+                return None
+        return None
 
     def _start_server(self) -> None:
         server_path = self._resolve_path(self.settings.server_path)

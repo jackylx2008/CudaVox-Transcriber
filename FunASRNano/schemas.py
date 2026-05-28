@@ -90,6 +90,7 @@ class LlamaCppSettings:
     base_url: str = "http://127.0.0.1:8080/v1"
     model: str = "Qwen3.6-27B-Q4_K_M"
     autostart: bool = False
+    shutdown_existing_on_exit: bool = False
     server_path: str = ""
     model_path: str = ""
     mmproj_path: str = ""

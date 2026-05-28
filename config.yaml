@@ -59,6 +59,7 @@ llamacpp:
   base_url: ${LLAMACPP_BASE_URL:-http://127.0.0.1:8080/v1}
   model: ${LLAMACPP_MODEL:-Qwen3.6-27B-Q4_K_M}
   autostart: ${LLAMACPP_AUTOSTART:-false}
+  shutdown_existing_on_exit: ${LLAMACPP_SHUTDOWN_EXISTING_ON_EXIT:-false}
   server_path: ${LLAMACPP_SERVER_PATH:-}
   model_path: ${LLAMACPP_MODEL_PATH:-}
   mmproj_path: ${LLAMACPP_MMPROJ_PATH:-}

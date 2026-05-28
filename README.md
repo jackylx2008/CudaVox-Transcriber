@@ -179,6 +179,12 @@ python .\Deprecated_main.py --input ".\input\2026-03-25 21_50_00.mp3"
 - 保留原始分散日志，例如入口日志、`qwen_asr_server.err.log`、`llama_server.err.log`
 - 运行 `main.py` 时，主要 INFO 级运行记录会同时写入 `log/main.log`
 
+Qwen3.6 llama.cpp 服务生命周期：
+
+- `LLAMACPP_AUTOSTART=true` 时，如果 8080 服务未启动，程序会自动启动 `llama-server`
+- 默认只关闭本次自动启动的 `llama-server`
+- 如果需要运行结束后也关闭已经存在的 8080 服务，设置 `LLAMACPP_SHUTDOWN_EXISTING_ON_EXIT=true`
+
 切换 ASR backend：
 
 ```powershell
