@@ -86,6 +86,24 @@ class QwenTextSettings:
 
 
 @dataclass
+class LlamaCppSettings:
+    base_url: str = "http://127.0.0.1:8080/v1"
+    model: str = "Qwen3.6-27B-Q4_K_M"
+    autostart: bool = False
+    server_path: str = ""
+    model_path: str = ""
+    mmproj_path: str = ""
+    extra_dll_dirs: str = ""
+    n_gpu_layers: int = 999
+    ctx_size: int = 8192
+    host: str = "127.0.0.1"
+    port: int = 8080
+    reasoning: str = "off"
+    reasoning_budget: int = 0
+    startup_timeout_seconds: int = 300
+
+
+@dataclass
 class PyannoteSettings:
     model: str = "pyannote/speaker-diarization-community-1"
     token: str = ""
@@ -133,6 +151,7 @@ class Settings:
     funasr: FunASRSettings = field(default_factory=FunASRSettings)
     sensevoice: SenseVoiceSettings = field(default_factory=SenseVoiceSettings)
     qwen_text: QwenTextSettings = field(default_factory=QwenTextSettings)
+    llamacpp: LlamaCppSettings = field(default_factory=LlamaCppSettings)
     pyannote: PyannoteSettings = field(default_factory=PyannoteSettings)
     campp: CamppSettings = field(default_factory=CamppSettings)
     pipeline: PipelineSettings = field(default_factory=PipelineSettings)

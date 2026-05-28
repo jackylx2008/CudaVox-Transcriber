@@ -7,13 +7,26 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from FunASRNano.llamacpp_runtime import LlamaCppServerManager
 from FunASRNano.schemas import QwenTextSettings, TranscriptSegment
 
 
 class QwenTextProcessor:
-    def __init__(self, settings: QwenTextSettings, logger) -> None:
+    def __init__(
+        self,
+        settings: QwenTextSettings,
+        logger,
+        server_manager: LlamaCppServerManager | None = None,
+    ) -> None:
         self.settings = settings
         self.logger = logger
+        self.server_manager = server_manager
+        self._server_checked = False
+
+    def shutdown(self) -> None:
+        if self.server_manager is not None:
+            self.server_manager.shutdown_started_server()
+        self._server_checked = False
 
     def cleanup_segments(self, segments: list[TranscriptSegment]) -> None:
         if not self.settings.enabled or not self.settings.enable_segment_cleanup:
@@ -89,6 +102,7 @@ class QwenTextProcessor:
         return transcript
 
     def _chat(self, prompt: str, max_tokens: int) -> str:
+        self._ensure_server()
         payload = {
             "model": self.settings.model,
             "temperature": self.settings.temperature,
@@ -124,6 +138,12 @@ class QwenTextProcessor:
 
     def _url(self, endpoint: str) -> str:
         return f"{self.settings.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+
+    def _ensure_server(self) -> None:
+        if self._server_checked or self.server_manager is None:
+            return
+        self.server_manager.ensure_server()
+        self._server_checked = True
 
     @staticmethod
     def _extract_message_content(payload: Any) -> str:

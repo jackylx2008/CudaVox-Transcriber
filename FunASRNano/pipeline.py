@@ -17,6 +17,7 @@ from FunASRNano.audio import (
     ensure_dir,
     extract_wav_segment,
 )
+from FunASRNano.llamacpp_runtime import LlamaCppServerManager
 from FunASRNano.pyannote_service import PyannoteDiarizer
 from FunASRNano.qwen_text_service import QwenTextProcessor
 from FunASRNano.runtime import resolve_device
@@ -44,7 +45,16 @@ class CudaVoxPipeline:
 
         self.diarizer = PyannoteDiarizer(settings.pyannote, self.device, self.logger)
         self.asr_backend = create_asr_backend(settings, self.device, self.logger)
-        self.text_processor = QwenTextProcessor(settings.qwen_text, self.logger)
+        self.llamacpp_server = LlamaCppServerManager(
+            settings.llamacpp,
+            self.logger,
+            project_root=Path.cwd(),
+        )
+        self.text_processor = QwenTextProcessor(
+            settings.qwen_text,
+            self.logger,
+            server_manager=self.llamacpp_server,
+        )
         self.voiceprints = VoiceprintStore(settings.campp, self.device, self.logger)
 
     def process_file(self, input_path: str | Path) -> dict[str, str]:
@@ -92,9 +102,12 @@ class CudaVoxPipeline:
 
         raw_segments = [replace(segment) for segment in segments]
         merged_segments = self._merge_segments(segments)
-        self.text_processor.cleanup_segments(merged_segments)
-        summary = self.text_processor.summarize(merged_segments)
-        structured = self.text_processor.structured_output(merged_segments)
+        try:
+            self.text_processor.cleanup_segments(merged_segments)
+            summary = self.text_processor.summarize(merged_segments)
+            structured = self.text_processor.structured_output(merged_segments)
+        finally:
+            self.text_processor.shutdown()
         self.logger.info(
             "文本合并完成: 原始片段=%s, 合并后片段=%s",
             len(raw_segments),
