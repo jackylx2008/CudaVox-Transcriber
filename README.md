@@ -36,6 +36,7 @@
 
 - 入口层：
   [main.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/main.py)、
+  [_main.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/_main.py)、
   [cli.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/cli.py)
 - 编排层：
   [pipeline.py](/d:/CloudStation/Python/Project/CudaVox-Transcriber/FunASRNano/pipeline.py)
@@ -165,11 +166,13 @@ python main.py --config .\config.yaml
 python -m FunASRNano --input ".\input\2026-03-25 21_50_00.mp3"
 ```
 
-独立转写工作流：
+兼容旧入口：
 
 ```powershell
-python .\scripts\transcribe_audio.py --input ".\input\2026-03-25 21_50_00.mp3"
+python .\_main.py --input ".\input\2026-03-25 21_50_00.mp3"
 ```
+
+`_main.py` is deprecated. New commands should use `main.py`. `scripts/transcribe_audio.py` is kept as an internal workflow entrypoint and should not be used as the documented project entry.
 
 切换 ASR backend：
 
@@ -278,10 +281,10 @@ speaker_0002=李四
 
 ## 后续扩展建议
 
-如果继续沿当前重构方向扩展，建议按独立工作流增加脚本，而不是继续让 `pipeline.py` 变胖：
+如果继续沿当前重构方向扩展，建议按内部工作流增加脚本，而不是继续让 `pipeline.py` 变胖：
 
 - `transcribe_audio.py`
-  负责“音频 -> TranscriptDocument”
+  内部入口，负责“音频 -> TranscriptDocument”
 - `cut_audio_by_srt.py`
   负责“读取 SRT -> 切音频”
 - `export_voiceprint_samples.py`
